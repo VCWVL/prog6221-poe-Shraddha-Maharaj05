@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ChatbotPart3;
+using System;
 using System.Text;
 
 namespace ChatbotPart3
@@ -81,11 +82,11 @@ namespace ChatbotPart3
         // Returns invalid choice message string
         public string GetInvalidChoiceMessage()
         {
-            return "I'm not sure I understand. Can you try rephrasing by typing a valid topic (e.g., phishing, password safety, suspicious links).\n";
+            return "I'm not sure I understand. Can you try rephrasing by typing a valid topic (e.g., phishing, password safety, suspicious links) or task command (e.g., add task, view tasks).\n";
         }
 
         // Returns tips displayed inside a box as a formatted string
-        public string GetTipsBox(string[] lines)
+        public string GetTipsBox(string[] lines, ConsoleColor borderColor = ConsoleColor.Cyan)
         {
             int width = 0;
             foreach (string line in lines)
@@ -103,6 +104,23 @@ namespace ChatbotPart3
             sb.AppendLine($"╚{border}╝\n");
 
             return sb.ToString();
+        }
+
+        // Display task information in a formatted box
+        public string GetTaskBox(CyberTask task)
+        {
+            string[] lines = {
+                $"Title: {task.Title}",
+                $"Description: {task.Description}",
+                $"Status: {(task.IsCompleted ? "Completed" : "Pending")}",
+                $"Reminder: {(task.ReminderDate.HasValue ? task.ReminderDate.Value.ToShortDateString() : "None")}"
+            };
+
+            ConsoleColor color = task.IsCompleted ? ConsoleColor.Green :
+                                (task.ReminderDate.HasValue && task.ReminderDate.Value.Date <= DateTime.Now.Date) ?
+                                ConsoleColor.Red : ConsoleColor.Cyan;
+
+            return GetTipsBox(lines, color);
         }
     }
 }

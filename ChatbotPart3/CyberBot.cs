@@ -1,5 +1,8 @@
-﻿using System;
+﻿using ChatbotPart3;
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 
 namespace ChatbotPart3
 {
@@ -9,9 +12,17 @@ namespace ChatbotPart3
         private readonly QuestionService _questionService = new QuestionService();
         private readonly TopicService _topicService = new TopicService();
         private readonly DisplayService _displayService = new DisplayService();
+        private readonly TaskService _taskService = new TaskService();
+        private readonly TaskManager _taskManager;
 
         private UserProfile _userProfile = new UserProfile();
         private List<string> _userInquiries = new List<string>();
+
+        public CyberBot()
+        {
+            _taskService = new TaskService();
+            _taskManager = new TaskManager(_taskService, _displayService);
+        }
 
         public void Run()
         {
@@ -37,10 +48,20 @@ namespace ChatbotPart3
 
             Console.WriteLine("\nWhat would you like to learn about?");
             Console.WriteLine("(phishing, password safety, suspicious links, privacy, social engineering, identity theft)");
+            Console.WriteLine("You can also manage tasks by saying 'add task', 'view tasks', 'complete task', or 'delete task'");
             Console.WriteLine("Type 'exit' to quit.");
 
             while (true)
             {
+                // Check for due reminders
+                string reminderAlert = _taskManager.CheckForDueReminders(_userProfile);
+                if (!string.IsNullOrEmpty(reminderAlert))
+                {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine(reminderAlert);
+                    Console.ResetColor();
+                }
+
                 string input = Console.ReadLine().ToLower();
 
                 if (input == "exit")
@@ -49,6 +70,15 @@ namespace ChatbotPart3
                     Console.WriteLine("\nPress Enter to exit...");
                     Console.ReadLine();  // Wait for user input before closing
                     break;
+                }
+
+                // Handle task-related commands
+                string taskResponse = _taskManager.ProcessTaskCommand(_userProfile, input);
+                if (taskResponse != null)
+                {
+                    Console.WriteLine(taskResponse);
+                    Console.WriteLine("\nWhat else would you like to do?");
+                    continue;
                 }
 
                 DetectSentiment(input);
@@ -174,10 +204,10 @@ namespace ChatbotPart3
                 switch (last)
                 {
                     case "phishing":
-                        AskFollowUp("Here’s more about phishing techniques and how to spot them:");
+                        AskFollowUp("Here's more about phishing techniques and how to spot them:");
                         break;
                     case "password safety":
-                        AskFollowUp("Here’s some useful advice on using password managers and strong password habits:");
+                        AskFollowUp("Here's some useful advice on using password managers and strong password habits:");
                         break;
                     case "suspicious links":
                         AskFollowUp("Let's talk about how to detect suspicious links and scams online:");
@@ -235,7 +265,7 @@ namespace ChatbotPart3
             }
             else if (input.Contains("frustrated") || input.Contains("upset") || input.Contains("angry"))
             {
-                Console.WriteLine("Cybersecurity can be frustrating sometimes. Here’s how to stay calm and secure:");
+                Console.WriteLine("Cybersecurity can be frustrating sometimes. Here's how to stay calm and secure:");
                 Console.WriteLine("- Break problems into smaller steps.");
                 Console.WriteLine("- Seek help from trusted forums like Stack Overflow or Reddit.");
                 Console.WriteLine("- Ask a friend or colleague for help.");

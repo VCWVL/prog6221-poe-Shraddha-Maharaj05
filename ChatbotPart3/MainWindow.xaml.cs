@@ -1,5 +1,4 @@
-﻿using ChatbotPart3;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,6 +12,8 @@ namespace ChatbotPart3
         private readonly QuestionService _questionService = new QuestionService();
         private readonly TopicService _topicService = new TopicService();
         private readonly DisplayService _displayService = new DisplayService();
+        private readonly TaskService _taskService = new TaskService();
+        private readonly TaskManager _taskManager;
 
         private UserProfile _userProfile = new UserProfile();
         private List<string> _userInquiries = new List<string>();
@@ -22,6 +23,7 @@ namespace ChatbotPart3
         public MainWindow()
         {
             InitializeComponent();
+            _taskManager = new TaskManager(_taskService, _displayService);
             StartChat();
         }
 
@@ -99,9 +101,25 @@ namespace ChatbotPart3
                     return;
                 }
 
+                // Check for due reminders
+                string reminderAlert = _taskManager.CheckForDueReminders(_userProfile);
+                if (!string.IsNullOrEmpty(reminderAlert))
+                {
+                    AppendChat(reminderAlert);
+                }
+
                 if (input.Contains("remember") && input.Contains("name"))
                 {
                     AppendChat($"Of course, your name is {_userProfile.Name}!");
+                    PromptTopics();
+                    return;
+                }
+
+                // Handle task-related commands
+                string taskResponse = _taskManager.ProcessTaskCommand(_userProfile, input);
+                if (taskResponse != null)
+                {
+                    AppendChat(taskResponse);
                     PromptTopics();
                     return;
                 }
@@ -145,7 +163,7 @@ namespace ChatbotPart3
                 }
 
                 // Unrecognized input fallback
-                AppendChat("🤔 I'm not sure how to help with that. Try asking about topics like phishing, password safety, or privacy.");
+                AppendChat("🤔 I'm not sure how to help with that. Try asking about topics like phishing, password safety, or privacy, or manage your tasks with commands like 'add task' or 'view tasks'.");
                 PromptTopics();
             }
             catch (Exception ex)
@@ -248,7 +266,7 @@ namespace ChatbotPart3
                     AppendChat("- Use link scanners or antivirus tools to test suspicious links.");
                     break;
                 case "privacy":
-                    AppendChat("- Don’t overshare on public forums.");
+                    AppendChat("- Don't overshare on public forums.");
                     AppendChat("- Use private browsing when needed.");
                     break;
                 case "social engineering":
@@ -286,8 +304,9 @@ namespace ChatbotPart3
 
         private void PromptTopics()
         {
-            AppendChat("What else would you like to learn about?");
-            AppendChat("(phishing, password safety, suspicious links, privacy, social engineering, identity theft)");
+            AppendChat("What would you like to do next?");
+            AppendChat("- Learn about: phishing, password safety, suspicious links, privacy, social engineering, identity theft");
+            AppendChat("- Task management: add task, view tasks, complete task, delete task");
             AppendChat("Type 'exit' to quit.");
         }
 
