@@ -3,211 +3,163 @@ using System.Collections.Generic;
 
 namespace ChatbotPart3
 {
-    class CyberBot
+    public class CyberBot
     {
-        private readonly GreetingService _greetingService;
-        private readonly QuestionService _questionService;
-        private readonly TopicService _topicService;
-        private readonly DisplayService _displayService;
-        private UserProfile _userProfile;
-        private List<string> _userInquiries;
+        private readonly GreetingService _greetingService = new GreetingService();
+        private readonly QuestionService _questionService = new QuestionService();
+        private readonly TopicService _topicService = new TopicService();
+        private readonly DisplayService _displayService = new DisplayService();
 
-        public CyberBot()
-        {
-            _greetingService = new GreetingService();
-            _questionService = new QuestionService();
-            _topicService = new TopicService();
-            _displayService = new DisplayService();
-            _userProfile = new UserProfile();
-            _userInquiries = new List<string>();
-        }
+        private UserProfile _userProfile = new UserProfile();
+        private List<string> _userInquiries = new List<string>();
 
-        public void StartChat()
+        public void Run()
         {
+            Console.WriteLine("Welcome to CyberBot!");
             _greetingService.PlayWelcomeSound();
-            _displayService.DisplayAsciiArt();
 
-            Console.Write("Please enter your name: ");
+            Console.WriteLine(_displayService.GetAsciiArt());
+            Console.WriteLine("Please enter your name:");
             _userProfile.Name = Console.ReadLine();
 
-            _displayService.DisplayWelcomeMessage(_userProfile.Name);
-            _questionService.AskPredefinedQuestions(_userProfile.Name);
+            Console.WriteLine(_displayService.GetWelcomeMessageBox(_userProfile.Name));
+            Console.WriteLine("Let's begin a few quick questions to get to know your needs.");
 
-            bool keepGoing = true;
-
-            while (keepGoing)
+            while (!_questionService.IsQuestionnaireComplete())
             {
-                Console.WriteLine("\nWhat would you like to learn about? (e.g., phishing, password safety, suspicious links, privacy)");
-                Console.WriteLine("Type 'exit' at any time to quit the program.");
-                string userInput = Console.ReadLine().Trim().ToLower();
-                Console.Clear();
+                Console.WriteLine(_questionService.GetNextQuestion());
+                string answer = Console.ReadLine();
+                Console.WriteLine(_questionService.ProcessAnswer(answer, _userProfile));
+            }
 
-                if (userInput == "exit")
+            Console.WriteLine("\nThanks! Here's a summary of what I learned about you:");
+            Console.WriteLine(_userProfile.GetUserSummary());
+
+            Console.WriteLine("\nWhat would you like to learn about?");
+            Console.WriteLine("(phishing, password safety, suspicious links, privacy, social engineering, identity theft)");
+            Console.WriteLine("Type 'exit' to quit.");
+
+            while (true)
+            {
+                string input = Console.ReadLine().ToLower();
+
+                if (input == "exit")
                 {
-                    _displayService.DisplayGoodbyeMessage(_userProfile.Name);
+                    Console.WriteLine(_displayService.GetGoodbyeMessage(_userProfile.Name));
+                    Console.WriteLine("\nPress Enter to exit...");
+                    Console.ReadLine();  // Wait for user input before closing
                     break;
                 }
 
-                bool validTopic = false;
+                DetectSentiment(input);
 
-                if (userInput.Contains("phishing"))
-                {
-                    _userInquiries.Add("phishing");
-                    UpdateFavoriteTopic("phishing");
-                    Console.WriteLine(_topicService.GetPhishingInfo());
-                    validTopic = true;
-                }
-                else if (userInput.Contains("password"))
-                {
-                    _userInquiries.Add("password safety");
-                    UpdateFavoriteTopic("password safety");
-                    Console.WriteLine(_topicService.GetPasswordInfo());
-                    validTopic = true;
-                }
-                else if (userInput.Contains("suspicious links"))
-                {
-                    _userInquiries.Add("suspicious links");
-                    UpdateFavoriteTopic("suspicious links");
-                    Console.WriteLine(_topicService.GetSuspiciousLinksInfo());
-                    validTopic = true;
-                }
-                else if (userInput.Contains("privacy"))
-                {
-                    _userInquiries.Add("privacy");
-                    UpdateFavoriteTopic("privacy");
-                    Console.WriteLine(_topicService.GetPrivacyInfo());
-                    validTopic = true;
-                }
+                string topic = DetectTopic(input);
+                bool wantsMoreDetails = DetectMoreDetailsRequest(input);
 
-                if (!validTopic)
+                if (topic != null)
                 {
-                    _displayService.DisplayInvalidChoiceMessage();
-                    continue;
-                }
+                    _userInquiries.Add(topic);
+                    UpdateFavoriteTopic(topic);
 
-                ProvideContextualFollowUp();
-
-                while (true)
-                {
-                    Console.WriteLine("\nDo you have any follow-up questions or need more details? (yes/no)");
-                    string followUp = Console.ReadLine().Trim().ToLower();
-                    if (followUp == "yes")
+                    if (wantsMoreDetails)
                     {
-                        Console.Write("\nPlease ask your question: ");
-                        string followUpQuestion = Console.ReadLine().Trim().ToLower();
-                        DetectSentiment(followUpQuestion);
-
-                        if (!string.IsNullOrEmpty(_userProfile.FavoriteTopic) &&
-                            followUpQuestion.Contains(_userProfile.FavoriteTopic))
+                        Console.WriteLine(_topicService.GetDetailedInfo(topic));
+                        HandleFollowUpQuestions(topic);
+                    }
+                    else
+                    {
+                        // Use delegate from TopicService for basic info
+                        if (_topicService.BasicInfoHandlers.TryGetValue(topic, out var handler))
                         {
-                            Console.WriteLine($"As someone interested in {_userProfile.FavoriteTopic}, here are some additional tips:");
-                            ProvidePersonalizedTips();
+                            Console.WriteLine(handler());
                         }
                         else
                         {
-                            HandleFollowUpQuestions(followUpQuestion);
+                            Console.WriteLine(_displayService.GetInvalidChoiceMessage());
                         }
-                        break;
                     }
-                    else if (followUp == "no")
-                    {
-                        Console.WriteLine("Okay! If you have any other questions, feel free to ask.");
-                        break;
-                    }
-                    else
-                    {
-                        Console.WriteLine("Please input 'yes' or 'no'.");
-                    }
+
+                    ProvideContextualFollowUp();
+                }
+                else
+                {
+                    Console.WriteLine(_displayService.GetInvalidChoiceMessage());
                 }
 
-                while (true)
-                {
-                    Console.WriteLine("\nIs there anything else you'd like to know about cybersecurity? (yes/no)");
-                    string additionalInfo = Console.ReadLine().Trim().ToLower();
-                    if (additionalInfo == "yes")
-                    {
-                        break;
-                    }
-                    else if (additionalInfo == "no")
-                    {
-                        Console.WriteLine("Alright! If you have any other questions in the future, feel free to reach out.");
-                        _displayService.DisplayGoodbyeMessage(_userProfile.Name);
-                        keepGoing = false;
-                        break;
-                    }
-                    else
-                    {
-                        Console.WriteLine("Please input 'yes' or 'no'.");
-                    }
-                }
+                Console.WriteLine("\nWhat else would you like to learn about?");
             }
+        }
+
+        private string DetectTopic(string input)
+        {
+            // Return first matching topic keyword found in input
+            foreach (var topicKey in _topicService.BasicInfoHandlers.Keys)
+            {
+                if (input.Contains(topicKey))
+                    return topicKey;
+            }
+            return null;
+        }
+
+        private bool DetectMoreDetailsRequest(string input)
+        {
+            string[] detailPhrases = new[]
+            {
+                "more details", "extra info", "tell me more", "explain further", "more information", "deeper info"
+            };
+
+            foreach (var phrase in detailPhrases)
+            {
+                if (input.Contains(phrase)) return true;
+            }
+            return false;
         }
 
         private void UpdateFavoriteTopic(string topic)
         {
-            if (_userProfile.FavoriteTopic != topic)
+            if (string.IsNullOrEmpty(_userProfile.FavoriteTopic) ||
+                !_userProfile.FavoriteTopic.Equals(topic, StringComparison.OrdinalIgnoreCase))
             {
                 _userProfile.FavoriteTopic = topic;
-                Console.WriteLine($"Got it! I'll remember that you're interested in {topic}. It's a crucial part of staying safe online.");
             }
         }
 
-        private void ProvidePersonalizedTips()
-        {
-            if (_userProfile.FavoriteTopic == "phishing")
-            {
-                Console.WriteLine("- Always verify the sender's email address.");
-                Console.WriteLine("- Look for generic greetings like 'Dear Customer'.");
-                Console.WriteLine("- Be cautious of attachments in unsolicited emails.");
-            }
-            else if (_userProfile.FavoriteTopic == "password safety")
-            {
-                Console.WriteLine("- Use two-factor authentication whenever possible.");
-                Console.WriteLine("- Avoid using easily guessable information like birthdays.");
-                Console.WriteLine("- Regularly update your passwords and avoid reusing them.");
-            }
-            else if (_userProfile.FavoriteTopic == "suspicious links")
-            {
-                Console.WriteLine("- Hover over links to see the actual URL.");
-                Console.WriteLine("- Use URL expanders for shortened links.");
-                Console.WriteLine("- Search for the website directly instead of clicking unknown links.");
-            }
-            else if (_userProfile.FavoriteTopic == "privacy")
-            {
-                Console.WriteLine("- Regularly review your social media privacy settings.");
-                Console.WriteLine("- Limit the personal info you share online.");
-                Console.WriteLine("- Use strong privacy settings on all accounts.");
-            }
-        }
-
-        private void HandleFollowUpQuestions(string question)
+        private void HandleFollowUpQuestions(string topic)
         {
             Console.ForegroundColor = ConsoleColor.Cyan;
 
-            if (question.Contains("phishing"))
+            if (topic.Contains("phishing"))
             {
-                Console.WriteLine("Here are some additional tips on phishing:");
-                ProvidePersonalizedTips();
+                Console.WriteLine("Additional phishing tips:");
+                Console.WriteLine("- Verify sender email addresses.");
+                Console.WriteLine("- Watch out for generic greetings.");
+                Console.WriteLine("- Be cautious of unexpected attachments.");
             }
-            else if (question.Contains("password"))
+            else if (topic.Contains("password safety"))
             {
-                Console.WriteLine("Here are some additional tips on password safety:");
-                ProvidePersonalizedTips();
+                Console.WriteLine("More on password safety:");
+                Console.WriteLine("- Enable two-factor authentication.");
+                Console.WriteLine("- Don't reuse passwords.");
+                Console.WriteLine("- Avoid obvious personal info.");
             }
-            else if (question.Contains("suspicious"))
+            else if (topic.Contains("suspicious links"))
             {
-                Console.WriteLine("Here are some additional tips on suspicious links:");
-                ProvidePersonalizedTips();
+                Console.WriteLine("More on suspicious links:");
+                Console.WriteLine("- Hover to preview the real link.");
+                Console.WriteLine("- Use URL expanders for shortened links.");
+                Console.WriteLine("- Avoid clicking on unknown URLs.");
             }
-            else if (question.Contains("privacy"))
+            else if (topic.Contains("privacy"))
             {
-                Console.WriteLine("Here are some additional tips on privacy:");
-                ProvidePersonalizedTips();
+                Console.WriteLine("Extra privacy tips:");
+                Console.WriteLine("- Use strict social media privacy settings.");
+                Console.WriteLine("- Be mindful of oversharing online.");
+                Console.WriteLine("- Keep your software updated.");
             }
             else
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("I'm sorry, I can only provide info on phishing, password safety, suspicious links, or privacy.");
+                Console.WriteLine("Sorry, I can only give extended advice on phishing, password safety, suspicious links, or privacy.");
             }
 
             Console.ResetColor();
@@ -215,85 +167,78 @@ namespace ChatbotPart3
 
         private void ProvideContextualFollowUp()
         {
-            if (_userInquiries.Count == 0) return;
-
-            string last = _userInquiries[^1];
-
-            switch (last)
+            if (_userInquiries.Count > 0)
             {
-                case "phishing":
-                    AskFollowUp("Would you like to know about specific phishing techniques or how to recognize them?");
-                    break;
-                case "password safety":
-                    AskFollowUp("Are you interested in learning about password managers or creating strong passwords?");
-                    break;
-                case "suspicious links":
-                    AskFollowUp("Would you like tips on how to identify suspicious links or examples of common scams?");
-                    break;
-                case "privacy":
-                    AskFollowUp("Are you interested in learning about privacy settings on social media or general privacy tips?");
-                    break;
-            }
-        }
+                string last = _userInquiries[^1]; // C# 8.0 index from end
 
-        private void AskFollowUp(string question)
-        {
-            Console.WriteLine(question);
-            string response = Console.ReadLine().Trim().ToLower();
-            while (response != "yes" && response != "no")
-            {
-                Console.WriteLine("Please answer with 'yes' or 'no'.");
-                response = Console.ReadLine().Trim().ToLower();
-            }
-
-            if (response == "yes")
-            {
-                switch (question)
+                switch (last)
                 {
-                    case "Would you like to know about specific phishing techniques or how to recognize them?":
-                        Console.WriteLine("Spear phishing targets specific people using personal details.");
-                        Console.WriteLine("Training helps users spot and handle phishing emails.");
+                    case "phishing":
+                        AskFollowUp("Here’s more about phishing techniques and how to spot them:");
                         break;
-                    case "Are you interested in learning about password managers or creating strong passwords?":
-                        Console.WriteLine("Use 16+ characters with a mix of letters, numbers, and symbols.");
-                        Console.WriteLine("A password manager can help you store and generate strong passwords.");
+                    case "password safety":
+                        AskFollowUp("Here’s some useful advice on using password managers and strong password habits:");
                         break;
-                    case "Would you like tips on how to identify suspicious links or examples of common scams?":
-                        Console.WriteLine("Look closely at the domain. Watch for odd endings or names.");
-                        Console.WriteLine("Scams include imposter, advance-fee, romance, and investment fraud.");
+                    case "suspicious links":
+                        AskFollowUp("Let's talk about how to detect suspicious links and scams online:");
                         break;
-                    case "Are you interested in learning about privacy settings on social media or general privacy tips?":
-                        Console.WriteLine("Avoid sharing personal info like your address or birthdate.");
-                        Console.WriteLine("Always install updates — they include important security patches.");
+                    case "privacy":
+                        AskFollowUp("Here's more on protecting your privacy on social media and online accounts:");
                         break;
                 }
             }
-            else
-            {
-                Console.WriteLine("That's all for now? Feel free to reach out if you need more.");
-            }
         }
 
-        private void DetectSentiment(string userInput)
+        private void AskFollowUp(string prompt)
         {
-            if (userInput.Contains("worried") || userInput.Contains("concerned") || userInput.Contains("anxious"))
+            Console.WriteLine(prompt);
+            Console.ForegroundColor = ConsoleColor.Yellow;
+
+            if (prompt.Contains("phishing"))
             {
-                Console.WriteLine("It's okay to feel that way. Scammers are tricky. Here’s how to stay safe:");
-                Console.WriteLine("- Never give out personal info via email.");
-                Console.WriteLine("- Check URLs carefully before entering data.");
-                Console.WriteLine("- Don’t install software from untrusted sources.");
+                Console.WriteLine("Spear phishing is highly targeted and uses personalized details.");
+                Console.WriteLine("Always scrutinize links, even if they seem to come from known sources.");
             }
-            else if (userInput.Contains("curious") || userInput.Contains("want to know"))
+            else if (prompt.Contains("password managers"))
             {
-                Console.WriteLine("Great! Staying informed is smart.");
-                Console.WriteLine("- Follow cybersecurity news and trends.");
-                Console.WriteLine("- Explore tutorials and take online courses.");
+                Console.WriteLine("Password managers generate and store complex passwords securely.");
+                Console.WriteLine("Use unique passwords for each account to limit damage from breaches.");
             }
-            else if (userInput.Contains("frustrated") || userInput.Contains("upset") || userInput.Contains("angry"))
+            else if (prompt.Contains("suspicious links"))
             {
-                Console.WriteLine("Cybersecurity can feel overwhelming. You're not alone!");
-                Console.WriteLine("- Take breaks and revisit topics calmly.");
-                Console.WriteLine("- Let me know how I can better support your learning.");
+                Console.WriteLine("Common scams include fake invoices, support fraud, and lottery scams.");
+                Console.WriteLine("Check links for typos, strange domains, or unexpected redirects.");
+            }
+            else if (prompt.Contains("privacy"))
+            {
+                Console.WriteLine("Limit visibility of your profile information and posts.");
+                Console.WriteLine("Enable two-step verification on your accounts.");
+            }
+
+            Console.ResetColor();
+        }
+
+        private void DetectSentiment(string input)
+        {
+            if (input.Contains("worried") || input.Contains("concerned") || input.Contains("anxious"))
+            {
+                Console.WriteLine("It's okay to feel that way. Here are some basics to help ease your concerns:");
+                Console.WriteLine("- Avoid sharing sensitive data via email or unknown websites.");
+                Console.WriteLine("- Look out for fake login pages.");
+                Console.WriteLine("- Install a trusted antivirus tool.");
+            }
+            else if (input.Contains("curious") || input.Contains("want to know"))
+            {
+                Console.WriteLine("Great curiosity! Here's how to learn more:");
+                Console.WriteLine("- Follow trusted cybersecurity blogs.");
+                Console.WriteLine("- Take a beginner course on platforms like Coursera or Udemy.");
+            }
+            else if (input.Contains("frustrated") || input.Contains("upset") || input.Contains("angry"))
+            {
+                Console.WriteLine("Cybersecurity can be frustrating sometimes. Here’s how to stay calm and secure:");
+                Console.WriteLine("- Break problems into smaller steps.");
+                Console.WriteLine("- Seek help from trusted forums like Stack Overflow or Reddit.");
+                Console.WriteLine("- Ask a friend or colleague for help.");
             }
         }
     }

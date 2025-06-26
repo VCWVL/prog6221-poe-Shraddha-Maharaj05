@@ -1,10 +1,30 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace ChatbotPart3
 {
     public class TopicService
     {
         private readonly Random _random = new Random();
+
+        // Delegate to provide a string tip/info about a topic
+        public delegate string TopicHandler();
+
+        // Dictionary for quick lookup of basic info handlers by topic name
+        public Dictionary<string, TopicHandler> BasicInfoHandlers { get; private set; }
+
+        public TopicService()
+        {
+            BasicInfoHandlers = new Dictionary<string, TopicHandler>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "phishing", GetPhishingInfo },
+                { "password safety", GetPasswordInfo },
+                { "suspicious links", GetSuspiciousLinksInfo },
+                { "privacy", GetPrivacyInfo },
+                { "social engineering", GetSocialEngineeringInfo },
+                { "identity theft", GetIdentityTheftInfo }
+            };
+        }
 
         private readonly string[] phishingTips = new[]
         {
@@ -42,36 +62,65 @@ namespace ChatbotPart3
             "Avoid using the same email for all your online accounts."
         };
 
-        public string GetPhishingInfo()
+        private readonly string[] socialEngineeringTips = new[]
         {
-            return GetRandomTip(phishingTips);
-        }
+            "Always verify the identity of anyone asking for sensitive information.",
+            "Be cautious of unsolicited phone calls or emails asking for details.",
+            "Don’t rush to respond — attackers use urgency to trick you.",
+            "Never give out passwords or PINs over the phone or email.",
+            "Educate yourself about common social engineering tactics like pretexting."
+        };
 
-        public string GetPasswordInfo()
+        private readonly string[] identityTheftTips = new[]
         {
-            return GetRandomTip(passwordTips);
-        }
+            "Regularly monitor your credit reports and bank statements.",
+            "Use strong, unique passwords and enable multi-factor authentication.",
+            "Be cautious about sharing personal information online.",
+            "Shred documents containing personal information before disposal.",
+            "Report any suspicious activity immediately to your bank or authorities."
+        };
 
-        public string GetSuspiciousLinksInfo()
-        {
-            return GetRandomTip(suspiciousLinksTips);
-        }
-
-        public string GetPrivacyInfo()
-        {
-            return GetRandomTip(privacyTips);
-        }
-
-        // Methods for CyberBot.cs (alternate naming)
-        public string PhishingInfo() => GetPhishingInfo();
-        public string PasswordInfo() => GetPasswordInfo();
-        public string SuspiciousLinksInfo() => GetSuspiciousLinksInfo();
-        public string PrivacyInfo() => GetPrivacyInfo();
+        public string GetPhishingInfo() => GetRandomTip(phishingTips);
+        public string GetPasswordInfo() => GetRandomTip(passwordTips);
+        public string GetSuspiciousLinksInfo() => GetRandomTip(suspiciousLinksTips);
+        public string GetPrivacyInfo() => GetRandomTip(privacyTips);
+        public string GetSocialEngineeringInfo() => GetRandomTip(socialEngineeringTips);
+        public string GetIdentityTheftInfo() => GetRandomTip(identityTheftTips);
 
         private string GetRandomTip(string[] tips)
         {
             int index = _random.Next(tips.Length);
             return tips[index];
+        }
+
+        public string GetDetailedInfo(string topic)
+        {
+            return topic.ToLower() switch
+            {
+                "phishing" =>
+                    "Advanced phishing includes spear phishing targeting specific individuals, " +
+                    "attackers researching social media to craft believable messages, and urgent language like 'your account will be locked'.",
+
+                "password safety" =>
+                    "Strong passwords should be at least 12 characters combining symbols, uppercase, and lowercase letters. " +
+                    "Use password managers to avoid reuse and never store passwords in plain text.",
+
+                "suspicious links" =>
+                    "Suspicious links may lead to fake websites designed to steal your info. Always verify URLs carefully, " +
+                    "watch for typos, and avoid links from untrusted sources.",
+
+                "privacy" =>
+                    "Protect your privacy by limiting data shared on social networks, adjusting app permissions, " +
+                    "and avoiding public Wi-Fi for sensitive transactions.",
+
+                "social engineering" =>
+                    "Social engineering exploits human trust and emotions to gain confidential info. Examples include phishing calls, baiting, and impersonation.",
+
+                "identity theft" =>
+                    "Identity theft occurs when criminals use your personal info for fraud. Prevent it by monitoring accounts, securing your data, and reporting anomalies promptly.",
+
+                _ => "Sorry, no detailed info is available for that topic."
+            };
         }
     }
 }
