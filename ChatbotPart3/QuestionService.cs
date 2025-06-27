@@ -13,7 +13,7 @@
                 case 0:
                     return "1. How would you rate your knowledge of cybersecurity?\n   a) Beginner\n   b) Intermediate\n   c) Advanced";
                 case 1:
-                    return "2. Which cybersecurity topics are you most interested in?\n(Options: phishing, password safety, suspicious links, privacy, social engineering, identity theft)";
+                    return "2. Which cybersecurity topics are you most interested in?\n(Options: phishing, password safety, suspicious links, privacy, social engineering, identity theft, or type 'none' if you have no interest)";
                 case 2:
                     return "3. Are you currently worried about any cybersecurity threats?\n   a) Yes, I’ve been targeted or hacked before\n   b) Somewhat concerned\n   c) Not really";
                 default:
@@ -46,13 +46,19 @@
                     }
                     else
                     {
-                        userProfile.CyberKnowledgeLevel = "Unspecified";
-                        response = "Got it! I'll try to adjust to your level as we go.";
+                        response = "⚠️ Invalid input. Please choose a valid option (a, b, or c).";
+                        return response; // Reprompt the same question
                     }
                     break;
 
                 case 1: // Interest Areas
-                    if (!string.IsNullOrWhiteSpace(answer))
+                    if (answer == "none")
+                    {
+                        userProfile.InterestAreas = "None";
+                        userProfile.FavoriteTopic = "None";
+                        response = "Thanks! I’ll focus on general topics since you have no specific interests.";
+                    }
+                    else if (!string.IsNullOrWhiteSpace(answer))
                     {
                         userProfile.InterestAreas = answer;
                         userProfile.FavoriteTopic = answer.Split(',')[0].Trim();
@@ -60,8 +66,8 @@
                     }
                     else
                     {
-                        userProfile.InterestAreas = "General topics";
-                        response = "No worries! I’ll suggest some important topics to get us started.";
+                        response = "⚠️ No input detected. Please specify your interests or type 'none' if you have no interest.";
+                        return response; // Reprompt the same question
                     }
                     break;
 
@@ -83,8 +89,8 @@
                     }
                     else
                     {
-                        userProfile.ConcernLevel = "Unspecified";
-                        response = "Thanks for your input — let’s get started!";
+                        response = "⚠️ Invalid input. Please choose a valid option (a, b, or c).";
+                        return response; // Reprompt the same question
                     }
                     break;
             }

@@ -1,8 +1,8 @@
-﻿using ChatbotPart3;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ChatbotPart3
 {
@@ -10,6 +10,72 @@ namespace ChatbotPart3
     {
         private readonly TaskService _taskService;
         private readonly DisplayService _displayService;
+
+        // NLP patterns for task commands
+        private readonly Dictionary<string, List<string>> _taskCommandPatterns = new Dictionary<string, List<string>>
+        {
+            {
+                "add_task", new List<string>
+                {
+                    "add task", "create task", "new task", "make task", "add a task", "create a task",
+                    "add reminder", "create reminder", "set reminder", "remind me to", "need to remember",
+                    "i need to", "i should", "can you remind me", "don't let me forget", "help me remember"
+                }
+            },
+            {
+                "view_tasks", new List<string>
+                {
+                    "view tasks", "show tasks", "list tasks", "see tasks", "display tasks", "what are my tasks",
+                    "show my tasks", "view my tasks", "list my tasks", "show all tasks", "what tasks do i have",
+                    "show reminders", "view reminders", "what do i need to do", "my to-do list", "my todo list"
+                }
+            },
+            {
+                "complete_task", new List<string>
+                {
+                    "complete task", "mark task", "finish task", "done with task", "task complete", "task finished",
+                    "mark as done", "mark as complete", "mark as completed", "i completed", "i finished",
+                    "task is done", "completed task", "finished task", "mark task as done"
+                }
+            },
+            {
+                "delete_task", new List<string>
+                {
+                    "delete task", "remove task", "cancel task", "get rid of task", "erase task",
+                    "delete reminder", "remove reminder", "cancel reminder", "i don't need to", "no longer need to"
+                }
+            },
+            {
+                "set_reminder", new List<string>
+                {
+                    "remind me", "set reminder", "add reminder", "create reminder", "remind me about",
+                    "alert me", "notify me", "don't let me forget", "remember to", "remind me to"
+                }
+            },
+            {
+                "task_help", new List<string>
+                {
+                    "task help", "help with tasks", "how to use tasks", "task commands", "task instructions",
+                    "how do i add tasks", "how do tasks work", "help me with tasks", "task assistance"
+                }
+            },
+            {
+                "activity_log", new List<string>
+                {
+                    "activity log", "show log", "view log", "show activity", "view activity",
+                    "show history", "view history", "what have i done", "show actions"
+                }
+            }
+        };
+
+        // Cybersecurity-related keywords for task title extraction
+        private readonly List<string> _cybersecurityKeywords = new List<string>
+        {
+            "password", "2fa", "two factor", "authentication", "backup", "update", "patch",
+            "privacy", "settings", "scan", "virus", "malware", "firewall", "security",
+            "encryption", "vpn", "phishing", "suspicious", "links", "email", "social engineering",
+            "identity theft", "data breach", "secure", "protect", "antivirus"
+        };
 
         public TaskManager(TaskService taskService, DisplayService displayService)
         {
@@ -21,43 +87,87 @@ namespace ChatbotPart3
         {
             input = input.ToLower().Trim();
 
-            // Add task command
-            if (input.StartsWith("add task") || input.Contains("create task"))
+            // Special handling for activity log request
+            if (_taskCommandPatterns["activity_log"].Any(pattern => input.Contains(pattern)) ||
+                input.Contains("show") && input.Contains("log") ||
+                input.Contains("what have you done for me"))
             {
-                return HandleAddTask(userProfile, input);
-            }
-            // View tasks command
-            else if (input.Contains("view tasks") || input.Contains("show tasks") || input.Contains("list tasks"))
-            {
-                return _taskService.ViewTasks(userProfile);
-            }
-            // Complete task command
-            else if (input.Contains("complete task") || input.Contains("mark task"))
-            {
-                return HandleCompleteTask(userProfile, input);
-            }
-            // Delete task command
-            else if (input.Contains("delete task") || input.Contains("remove task"))
-            {
-                return HandleDeleteTask(userProfile, input);
-            }
-            // Set reminder for task
-            else if (input.Contains("remind") || input.Contains("reminder"))
-            {
-                return HandleSetReminder(userProfile, input);
-            }
-            // Task help command
-            else if (input.Contains("task help") || (input.Contains("help") && input.Contains("task")))
-            {
-                return GetTaskHelpText();
+                return userProfile.GetActivityLogSummary();
             }
 
-            return null; // Not a task-related command
+            // Special handling for "Show me my tasks" and similar phrases
+            if (input.Contains("show") && input.Contains("task") ||
+                input.Contains("view") && input.Contains("task") ||
+                input.Contains("list") && input.Contains("task") ||
+                input.Contains("what") && input.Contains("task") && input.Contains("have"))
+            {
+                userProfile.LogActivity("Viewed task list", "Task", "Displayed all tasks");
+                return _taskService.ViewTasks(userProfile);
+            }
+
+            // Special handling for "I finished task X" pattern
+            if ((input.Contains("finish") || input.Contains("complete") || input.Contains("done")) &&
+                (input.Contains("first") || input.Contains("1")))
+            {
+                if (userProfile.Tasks.Count > 0)
+                {
+                    userProfile.LogActivity("Completed task", "Task", $"Marked '{userProfile.Tasks[0].Title}' as completed");
+                    return _taskService.MarkTaskComplete(userProfile, 0); // First task (index 0)
+                }
+            }
+
+            if ((input.Contains("finish") || input.Contains("complete") || input.Contains("done")) &&
+                (input.Contains("second") || input.Contains("2")))
+            {
+                if (userProfile.Tasks.Count > 1)
+                {
+                    userProfile.LogActivity("Completed task", "Task", $"Marked '{userProfile.Tasks[1].Title}' as completed");
+                    return _taskService.MarkTaskComplete(userProfile, 1); // Second task (index 1)
+                }
+            }
+
+            // Detect command type using NLP patterns
+            string commandType = DetectTaskCommandType(input);
+
+            if (commandType == null)
+                return null; // Not a task-related command
+
+            switch (commandType)
+            {
+                case "add_task":
+                    return HandleAddTask(userProfile, input);
+                case "view_tasks":
+                    userProfile.LogActivity("Viewed task list", "Task", "Displayed all tasks");
+                    return _taskService.ViewTasks(userProfile);
+                case "complete_task":
+                    return HandleCompleteTask(userProfile, input);
+                case "delete_task":
+                    return HandleDeleteTask(userProfile, input);
+                case "set_reminder":
+                    return HandleSetReminder(userProfile, input);
+                case "task_help":
+                    userProfile.LogActivity("Viewed task help", "Task", "Displayed task help information");
+                    return GetTaskHelpText();
+                default:
+                    return null;
+            }
+        }
+
+        private string DetectTaskCommandType(string input)
+        {
+            foreach (var pattern in _taskCommandPatterns)
+            {
+                if (pattern.Value.Any(phrase => input.Contains(phrase)))
+                {
+                    return pattern.Key;
+                }
+            }
+            return null;
         }
 
         private string HandleAddTask(UserProfile userProfile, string input)
         {
-            // Extract task title after "add task" or "create task"
+            // Extract task title using NLP techniques
             string title = ExtractTaskTitle(input);
 
             if (string.IsNullOrWhiteSpace(title))
@@ -67,19 +177,22 @@ namespace ChatbotPart3
 
             // Check if the input includes reminder information
             DateTime? reminderDate = null;
-            int days = ExtractDaysFromInput(input);
-            if (days > 0)
+            int daysForReminder = ExtractDaysFromInput(input);
+            if (daysForReminder > 0)
             {
-                reminderDate = DateTime.Now.AddDays(days);
+                reminderDate = DateTime.Now.AddDays(daysForReminder);
             }
 
             // Generate a description based on the title
             string description = GenerateTaskDescription(title);
 
+            // Log the activity
+            string reminderInfo = reminderDate.HasValue ? $" with reminder for {reminderDate.Value.ToShortDateString()}" : "";
+            userProfile.LogActivity("Added task", "Task", $"'{title}'{reminderInfo}");
+
             // Add the task with reminder if specified
             return _taskService.AddTask(userProfile, title, description, reminderDate);
         }
-
         private string HandleCompleteTask(UserProfile userProfile, string input)
         {
             int taskIndex = ExtractTaskNumber(input) - 1; // Convert to zero-based index
@@ -88,6 +201,9 @@ namespace ChatbotPart3
             {
                 return "❌ Invalid task number. Use 'View tasks' to see your task list with numbers.";
             }
+
+            // Log the activity
+            userProfile.LogActivity("Completed task", "Task", $"Marked '{userProfile.Tasks[taskIndex].Title}' as completed");
 
             return _taskService.MarkTaskComplete(userProfile, taskIndex);
         }
@@ -101,15 +217,54 @@ namespace ChatbotPart3
                 return "❌ Invalid task number. Use 'View tasks' to see your task list with numbers.";
             }
 
+            // Log the activity before deleting the task
+            string taskTitle = userProfile.Tasks[taskIndex].Title;
+            userProfile.LogActivity("Deleted task", "Task", $"Removed '{taskTitle}'");
+
             return _taskService.DeleteTask(userProfile, taskIndex);
         }
 
         private string HandleSetReminder(UserProfile userProfile, string input)
         {
+            // Check if this is a new task with reminder
+            if (ContainsAddTaskPattern(input))
+            {
+                string title = ExtractTaskTitle(input);
+                if (!string.IsNullOrWhiteSpace(title))
+                {
+                    string description = GenerateTaskDescription(title);
+                    int daysForTask = ExtractDaysFromInput(input);
+                    DateTime? taskReminderDate = daysForTask > 0 ? DateTime.Now.AddDays(daysForTask) : null;
+
+                    // Log the activity
+                    string reminderInfo = taskReminderDate.HasValue ? $" with reminder for {taskReminderDate.Value.ToShortDateString()}" : "";
+                    userProfile.LogActivity("Added task", "Task", $"'{title}'{reminderInfo}");
+
+                    return _taskService.AddTask(userProfile, title, description, taskReminderDate);
+                }
+            }
+
+            // Handle "Remind me about that" pattern - use the most recently added task
+            if (input.Contains("that") && userProfile.Tasks.Count > 0)
+            {
+                int dayCount = ExtractDaysFromInput(input);
+                if (dayCount > 0)
+                {
+                    int lastTaskIndex = userProfile.Tasks.Count - 1;
+                    DateTime taskReminderDate = DateTime.Now.AddDays(dayCount);
+                    userProfile.Tasks[lastTaskIndex].ReminderDate = taskReminderDate;
+
+                    // Log the activity
+                    userProfile.LogActivity("Set reminder", "Reminder", $"For '{userProfile.Tasks[lastTaskIndex].Title}' on {taskReminderDate.ToShortDateString()}");
+
+                    return $"⏰ Reminder set for \"{userProfile.Tasks[lastTaskIndex].Title}\" on {userProfile.Tasks[lastTaskIndex].ReminderDate?.ToShortDateString()}";
+                }
+            }
+
             int taskIndex = ExtractTaskNumber(input) - 1; // Convert to zero-based index
 
             // If no task number is specified but we have tasks, assume the most recent task
-            if (taskIndex < 0 && userProfile.Tasks.Count > 0 && input.Contains("remind"))
+            if (taskIndex < 0 && userProfile.Tasks.Count > 0)
             {
                 taskIndex = userProfile.Tasks.Count - 1;
             }
@@ -120,17 +275,26 @@ namespace ChatbotPart3
             }
 
             // Extract days from input (e.g., "in 3 days" or "in 1 week")
-            int days = ExtractDaysFromInput(input);
+            int dayValue = ExtractDaysFromInput(input);
 
-            if (days <= 0)
+            if (dayValue <= 0)
             {
                 return "Please specify when to remind you. Example: 'Remind me about task 2 in 3 days'";
             }
 
             // Set the reminder date
-            userProfile.Tasks[taskIndex].ReminderDate = DateTime.Now.AddDays(days);
+            DateTime reminderDate = DateTime.Now.AddDays(dayValue);
+            userProfile.Tasks[taskIndex].ReminderDate = reminderDate;
+
+            // Log the activity
+            userProfile.LogActivity("Set reminder", "Reminder", $"For '{userProfile.Tasks[taskIndex].Title}' on {reminderDate.ToShortDateString()}");
 
             return $"⏰ Reminder set for \"{userProfile.Tasks[taskIndex].Title}\" on {userProfile.Tasks[taskIndex].ReminderDate?.ToShortDateString()}";
+        }
+
+        private bool ContainsAddTaskPattern(string input)
+        {
+            return _taskCommandPatterns["add_task"].Any(pattern => input.Contains(pattern));
         }
 
         public string CheckForDueReminders(UserProfile userProfile)
@@ -151,6 +315,9 @@ namespace ChatbotPart3
                 sb.AppendLine($"- {task.Title}: {task.Description}");
             }
 
+            // Log the activity
+            userProfile.LogActivity("Reminder alert", "Reminder", $"{dueReminders.Count} tasks due today");
+
             return sb.ToString();
         }
 
@@ -168,17 +335,55 @@ namespace ChatbotPart3
                 return title;
             }
 
-            // Handle "Add task Title" format
-            string[] parts = input.Split(new[] { "add task", "create task" }, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length > 0)
+            // Use NLP to extract task title
+            // First, remove known command patterns
+            string cleanedInput = input;
+
+            // Special handling for "need to remember" pattern
+            if (input.Contains("need to remember to"))
             {
-                string title = parts[parts.Length - 1].Trim();
-                // Remove any reminder text if present
-                if (title.Contains(" in "))
+                return input.Substring(input.IndexOf("need to remember to") + 19).Trim();
+            }
+
+            if (input.Contains("remind me to"))
+            {
+                return input.Substring(input.IndexOf("remind me to") + 12).Trim();
+            }
+
+            // Remove time-related phrases first
+            string[] timePatterns = { "tomorrow", "next week", "in a day", "in a week", "in one day", "in one week" };
+            foreach (var pattern in timePatterns)
+            {
+                cleanedInput = cleanedInput.Replace(pattern, "").Trim();
+            }
+
+            // Remove phrases like "in X days" or "in X weeks"
+            cleanedInput = Regex.Replace(cleanedInput, @"in \d+ days?", "").Trim();
+            cleanedInput = Regex.Replace(cleanedInput, @"in \d+ weeks?", "").Trim();
+
+            // Now remove command patterns
+            foreach (var patterns in _taskCommandPatterns.Values)
+            {
+                foreach (var pattern in patterns)
                 {
-                    title = title.Substring(0, title.IndexOf(" in ")).Trim();
+                    cleanedInput = cleanedInput.Replace(pattern, "").Trim();
                 }
-                return title;
+            }
+
+            // Remove common filler words
+            string[] fillerWords = { "please", "could you", "can you", "i want to", "i need to", "about", "for me", "for", "to" };
+            foreach (var word in fillerWords)
+            {
+                cleanedInput = cleanedInput.Replace(word, "").Trim();
+            }
+
+            // Clean up extra spaces and punctuation
+            cleanedInput = Regex.Replace(cleanedInput, @"\s+", " ").Trim();
+            cleanedInput = cleanedInput.Trim(',', '.', '!', '?', ':', ';');
+
+            if (!string.IsNullOrWhiteSpace(cleanedInput))
+            {
+                return char.ToUpper(cleanedInput[0]) + cleanedInput.Substring(1);
             }
 
             return string.Empty;
@@ -202,6 +407,25 @@ namespace ChatbotPart3
                 }
             }
 
+            // Look for number patterns like "#3" or "number 3"
+            Match numberMatch = Regex.Match(input, @"#(\d+)");
+            if (numberMatch.Success)
+            {
+                if (int.TryParse(numberMatch.Groups[1].Value, out int taskNumber))
+                {
+                    return taskNumber;
+                }
+            }
+
+            numberMatch = Regex.Match(input, @"number (\d+)");
+            if (numberMatch.Success)
+            {
+                if (int.TryParse(numberMatch.Groups[1].Value, out int taskNumber))
+                {
+                    return taskNumber;
+                }
+            }
+
             // Extract any digits as fallback
             string allDigits = new string(input.Where(char.IsDigit).ToArray());
 
@@ -215,68 +439,6 @@ namespace ChatbotPart3
 
         private int ExtractDaysFromInput(string input)
         {
-            // Handle "in X days"
-            if (input.Contains("day"))
-            {
-                int inIndex = input.IndexOf(" in ");
-                if (inIndex >= 0)
-                {
-                    string afterIn = input.Substring(inIndex + 4);
-                    string digits = new string(afterIn.TakeWhile(char.IsDigit).ToArray());
-
-                    if (int.TryParse(digits, out int days))
-                    {
-                        return days;
-                    }
-                }
-                else
-                {
-                    // Try to find any number before "day"
-                    int dayIndex = input.IndexOf("day");
-                    if (dayIndex > 0)
-                    {
-                        string beforeDay = input.Substring(0, dayIndex);
-                        string digits = new string(beforeDay.Where(char.IsDigit).ToArray());
-
-                        if (int.TryParse(digits, out int days))
-                        {
-                            return days;
-                        }
-                    }
-                }
-            }
-
-            // Handle "in X weeks"
-            if (input.Contains("week"))
-            {
-                int inIndex = input.IndexOf(" in ");
-                if (inIndex >= 0)
-                {
-                    string afterIn = input.Substring(inIndex + 4);
-                    string digits = new string(afterIn.TakeWhile(char.IsDigit).ToArray());
-
-                    if (int.TryParse(digits, out int weeks))
-                    {
-                        return weeks * 7; // Convert weeks to days
-                    }
-                }
-                else
-                {
-                    // Try to find any number before "week"
-                    int weekIndex = input.IndexOf("week");
-                    if (weekIndex > 0)
-                    {
-                        string beforeWeek = input.Substring(0, weekIndex);
-                        string digits = new string(beforeWeek.Where(char.IsDigit).ToArray());
-
-                        if (int.TryParse(digits, out int weeks))
-                        {
-                            return weeks * 7; // Convert weeks to days
-                        }
-                    }
-                }
-            }
-
             // Handle "tomorrow"
             if (input.Contains("tomorrow"))
             {
@@ -285,6 +447,38 @@ namespace ChatbotPart3
 
             // Handle "next week"
             if (input.Contains("next week"))
+            {
+                return 7;
+            }
+
+            // Handle "in X days"
+            Match daysMatch = Regex.Match(input, @"in (\d+) days?");
+            if (daysMatch.Success)
+            {
+                if (int.TryParse(daysMatch.Groups[1].Value, out int extractedDays))
+                {
+                    return extractedDays;
+                }
+            }
+
+            // Handle "in X weeks"
+            Match weeksMatch = Regex.Match(input, @"in (\d+) weeks?");
+            if (weeksMatch.Success)
+            {
+                if (int.TryParse(weeksMatch.Groups[1].Value, out int weeks))
+                {
+                    return weeks * 7; // Convert weeks to days
+                }
+            }
+
+            // Handle "in a day" or "in one day"
+            if (input.Contains("in a day") || input.Contains("in one day"))
+            {
+                return 1;
+            }
+
+            // Handle "in a week" or "in one week"
+            if (input.Contains("in a week") || input.Contains("in one week"))
             {
                 return 7;
             }
@@ -335,6 +529,14 @@ namespace ChatbotPart3
             sb.AppendLine("- Complete task [number]: Mark a task as completed");
             sb.AppendLine("- Delete task [number]: Remove a task");
             sb.AppendLine("- Remind me about task [number] in [X] days: Add a reminder");
+            sb.AppendLine("- Show activity log: View your recent actions");
+            sb.AppendLine();
+            sb.AppendLine("You can also use natural language like:");
+            sb.AppendLine("- \"Remind me to update my passwords tomorrow\"");
+            sb.AppendLine("- \"I need to enable two-factor authentication\"");
+            sb.AppendLine("- \"What tasks do I have?\"");
+            sb.AppendLine("- \"I finished task 2\"");
+            sb.AppendLine("- \"What have you done for me?\"");
 
             return sb.ToString();
         }

@@ -1,7 +1,7 @@
-﻿using ChatbotPart3;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace ChatbotPart3
 {
@@ -27,6 +27,9 @@ namespace ChatbotPart3
 
         // Keeps track of tasks
         public List<CyberTask> Tasks { get; set; } = new List<CyberTask>();
+
+        // Activity log to track user actions
+        public List<ActivityLogEntry> ActivityLog { get; set; } = new List<ActivityLogEntry>();
 
         // Add a new inquiry string to the list (ignores null/empty or whitespace)
         public void AddInquiry(string inquiry)
@@ -67,5 +70,40 @@ namespace ChatbotPart3
                                   t.ReminderDate.HasValue &&
                                   t.ReminderDate.Value.Date < DateTime.Now.Date).ToList();
         }
+
+        // Add an activity to the log
+        public void LogActivity(string action, string category, string details = "")
+        {
+            ActivityLog.Add(new ActivityLogEntry(action, category, details));
+        }
+
+        // Get recent activities (default to 10 most recent)
+        public List<ActivityLogEntry> GetRecentActivities(int count = 10)
+        {
+            return ActivityLog.OrderByDescending(a => a.Timestamp).Take(count).ToList();
+        }
+
+        public string GetActivityLogSummary(int count = 10)
+        {
+            // Get the most recent activities
+            var recentActivities = GetRecentActivities(count);
+
+            if (recentActivities.Count == 0)
+                return "No activities logged yet.";
+
+            // Reverse the list to show oldest first
+            recentActivities.Reverse();
+
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine("📋 Activity Log:");
+
+            for (int i = 0; i < recentActivities.Count; i++)
+            {
+                sb.AppendLine($"{i + 1}. {recentActivities[i].GetShortDescription()}");
+            }
+
+            return sb.ToString();
+        }
+
     }
 }

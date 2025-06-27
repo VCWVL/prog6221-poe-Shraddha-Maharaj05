@@ -1,7 +1,10 @@
-﻿using System;
+﻿using Microsoft.VisualBasic;
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ChatbotPart3
 {
@@ -18,6 +21,21 @@ namespace ChatbotPart3
 
         private UserProfile _userProfile = new UserProfile();
         private List<string> _userInquiries = new List<string>();
+
+        // NLP patterns for action summary request
+        private readonly List<string> _summaryRequestPatterns = new List<string>
+        {
+            "what have you done", "what did you do", "show me what you've done", "list actions",
+            "show actions", "what tasks", "show my tasks", "what reminders", "show my reminders",
+            "what have you done for me", "what have you helped me with", "show summary", "action summary"
+        };
+
+        // NLP patterns for activity log request
+        private readonly List<string> _activityLogRequestPatterns = new List<string>
+        {
+            "activity log", "show log", "view log", "show activity", "view activity",
+            "show history", "view history", "what have i done", "show actions"
+        };
 
         public CyberBot()
         {
@@ -36,6 +54,9 @@ namespace ChatbotPart3
             Console.WriteLine("Please enter your name:");
             _userProfile.Name = Console.ReadLine();
 
+            // Log the start of the session
+            _userProfile.LogActivity("Started session", "System", $"User: {_userProfile.Name}");
+
             Console.WriteLine(_displayService.GetWelcomeMessageBox(_userProfile.Name));
             Console.WriteLine("Let's begin a few quick questions to get to know your needs.");
 
@@ -46,6 +67,9 @@ namespace ChatbotPart3
                 Console.WriteLine(_questionService.ProcessAnswer(answer, _userProfile));
             }
 
+            // Log the completion of the questionnaire
+            _userProfile.LogActivity("Completed questionnaire", "System", $"Knowledge level: {_userProfile.CyberKnowledgeLevel}, Interests: {_userProfile.InterestAreas}");
+
             Console.WriteLine("\nThanks! Here's a summary of what I learned about you:");
             Console.WriteLine(_userProfile.GetUserSummary());
 
@@ -53,6 +77,7 @@ namespace ChatbotPart3
             Console.WriteLine("(phishing, password safety, suspicious links, privacy, social engineering, identity theft)");
             Console.WriteLine("You can also manage tasks by saying 'add task', 'view tasks', 'complete task', or 'delete task'");
             Console.WriteLine("Or test your knowledge with a quiz by typing 'start quiz' or 'quiz categories'");
+            Console.WriteLine("Type 'show activity log' to see your recent actions");
             Console.WriteLine("Type 'exit' to quit.");
 
             while (true)
@@ -70,10 +95,29 @@ namespace ChatbotPart3
 
                 if (input == "exit")
                 {
+                    // Log the end of the session
+                    _userProfile.LogActivity("Ended session", "System", "User exited the application");
+
                     Console.WriteLine(_displayService.GetGoodbyeMessage(_userProfile.Name));
                     Console.WriteLine("\nPress Enter to exit...");
                     Console.ReadLine();  // Wait for user input before closing
                     break;
+                }
+
+                // Check for activity log request
+                if (_activityLogRequestPatterns.Any(pattern => input.Contains(pattern)))
+                {
+                    Console.WriteLine(_userProfile.GetActivityLogSummary());
+                    Console.WriteLine("\nWhat else would you like to do?");
+                    continue;
+                }
+
+                // Check for action summary request
+                if (IsSummaryRequest(input))
+                {
+                    Console.WriteLine(GenerateActionSummary());
+                    Console.WriteLine("\nWhat else would you like to do?");
+                    continue;
                 }
 
                 // Handle task-related commands
@@ -86,12 +130,20 @@ namespace ChatbotPart3
                 }
 
                 // Handle quiz-related commands
-                if (input.Contains("quiz") || _quizManager.IsQuizInProgress())
+                if (_quizManager.IsQuizInProgress() || input.Contains("quiz"))
                 {
-                    string quizResponse = ProcessQuizCommand(input);
+                    string quizResponse = _quizManager.ProcessQuizCommand(input); 
                     if (quizResponse != null)
                     {
                         Console.WriteLine(quizResponse);
+
+                        // If quiz is in progress, wait for the next answer
+                        if (_quizManager.IsQuizInProgress())
+                        {
+                            input = Console.ReadLine().ToLower();
+                            continue; // Skip the rest of the loop to process the quiz answer
+                        }
+
                         Console.WriteLine("\nWhat else would you like to do?");
                         continue;
                     }
@@ -106,6 +158,9 @@ namespace ChatbotPart3
                 {
                     _userInquiries.Add(topic);
                     UpdateFavoriteTopic(topic);
+
+                    // Log the topic inquiry
+                    _userProfile.LogActivity("Asked about topic", "Topic", topic);
 
                     if (wantsMoreDetails)
                     {
@@ -133,56 +188,101 @@ namespace ChatbotPart3
                 }
 
                 Console.WriteLine("\nWhat else would you like to learn about?");
+                Console.WriteLine("(Type 'show activity log' to see your recent actions)");
             }
         }
 
-        private string ProcessQuizCommand(string input)
+        private bool IsSummaryRequest(string input)
         {
-            // If a quiz is in progress, process the answer
-            if (_quizManager.IsQuizInProgress())
-            {
-                return _quizManager.ProcessAnswer(input);
-            }
+            return _summaryRequestPatterns.Any(pattern => input.Contains(pattern));
+        }
 
-            // Start a new quiz
-            if (input.Contains("start quiz") || input.Contains("take quiz") || input == "quiz")
+        private string GenerateActionSummary()
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine("📋 Here's a summary of recent actions:");
+
+            // Add task summary
+            int completedTasks = _userProfile.Tasks.Count(t => t.IsCompleted);
+            int pendingTasks = _userProfile.Tasks.Count - completedTasks;
+
+            if (_userProfile.Tasks.Count > 0)
             {
-                // Check if a specific category was requested
-                foreach (var category in _quizService.GetAvailableCategories())
+                sb.AppendLine($"Tasks: {_userProfile.Tasks.Count} total ({completedTasks} completed, {pendingTasks} pending)");
+
+                // List tasks with reminders
+                var tasksWithReminders = _userProfile.Tasks.Where(t => t.ReminderDate.HasValue).ToList();
+                if (tasksWithReminders.Any())
                 {
-                    if (input.Contains(category.ToLower()))
+                    sb.AppendLine("Tasks with reminders:");
+                    int count = 1;
+                    foreach (var task in tasksWithReminders)
                     {
-                        return _quizManager.StartCategoryQuiz(category);
+                        string status = task.IsCompleted ? "✅ Completed" : "🕒 Pending";
+                        sb.AppendLine($"{count++}. {task.Title} - {status}, reminder on {task.ReminderDate?.ToShortDateString()}");
                     }
                 }
-
-                // Start a general quiz if no specific category
-                return _quizManager.StartQuiz();
             }
-
-            // Show available quiz categories
-            if (input.Contains("quiz categories") || input.Contains("quiz topics"))
+            else
             {
-                return _quizManager.GetAvailableCategories();
+                sb.AppendLine("No tasks have been created yet.");
             }
 
-            // If it's a quiz-related command but not handled above
-            if (input.Contains("quiz"))
+            // Add topic inquiries
+            if (_userInquiries.Count > 0)
             {
-                return "🎮 To start a cybersecurity quiz, type 'start quiz' or 'quiz categories' to see specific topics.";
+                sb.AppendLine($"\nTopics you've asked about: {_userInquiries.Count}");
+                var topTopics = _userInquiries
+                    .GroupBy(t => t)
+                    .OrderByDescending(g => g.Count())
+                    .Take(3)
+                    .ToList();
+
+                if (topTopics.Any())
+                {
+                    sb.AppendLine("Most frequently discussed topics:");
+                    foreach (var topic in topTopics)
+                    {
+                        sb.AppendLine($"- {topic.Key} ({topic.Count()} times)");
+                    }
+                }
             }
 
-            return null;
+            // Log the activity
+            _userProfile.LogActivity("Viewed action summary", "System", "Displayed summary of tasks and topics");
+
+            return sb.ToString();
         }
 
         private string DetectTopic(string input)
         {
-            // Return first matching topic keyword found in input
+            // Enhanced topic detection with NLP
+            // Check for direct topic mentions
             foreach (var topicKey in _topicService.BasicInfoHandlers.Keys)
             {
                 if (input.Contains(topicKey))
                     return topicKey;
             }
+
+            // Check for related terms
+            if (Regex.IsMatch(input, @"\b(email|spam|scam|fake email)\b"))
+                return "phishing";
+
+            if (Regex.IsMatch(input, @"\b(password|secure login|credentials|authentication)\b"))
+                return "password safety";
+
+            if (Regex.IsMatch(input, @"\b(url|link|website safety|clicking|suspicious website)\b"))
+                return "suspicious links";
+
+            if (Regex.IsMatch(input, @"\b(private|data protection|information security|personal data)\b"))
+                return "privacy";
+
+            if (Regex.IsMatch(input, @"\b(manipulation|pretexting|baiting|impersonation|trust)\b"))
+                return "social engineering";
+
+            if (Regex.IsMatch(input, @"\b(identity|personal information|stolen identity|fraud)\b"))
+                return "identity theft";
+
             return null;
         }
 
@@ -190,14 +290,12 @@ namespace ChatbotPart3
         {
             string[] detailPhrases = new[]
             {
-                "more details", "extra info", "tell me more", "explain further", "more information", "deeper info"
+                "more details", "extra info", "tell me more", "explain further", "more information", "deeper info",
+                "elaborate", "in depth", "details", "specifics", "more about", "additional information",
+                "can you explain", "how does it work", "need more info"
             };
 
-            foreach (var phrase in detailPhrases)
-            {
-                if (input.Contains(phrase)) return true;
-            }
-            return false;
+            return detailPhrases.Any(phrase => input.Contains(phrase));
         }
 
         private void UpdateFavoriteTopic(string topic)
@@ -248,6 +346,9 @@ namespace ChatbotPart3
             }
 
             Console.ResetColor();
+
+            // Log the detailed inquiry
+            _userProfile.LogActivity("Requested details", "Topic", $"Detailed information about {topic}");
         }
 
         private void ProvideContextualFollowUp()
@@ -306,7 +407,8 @@ namespace ChatbotPart3
                 Console.WriteLine("Common scams include fake invoices, support fraud, and lottery scams.");
                 Console.WriteLine("Check links for typos, strange domains, or unexpected redirects.");
             }
-            else if (prompt.Contains("privacy"))
+            else if (prompt.Contains("privacy")
+)
             {
                 Console.WriteLine("Limit visibility of your profile information and posts.");
                 Console.WriteLine("Enable two-step verification on your accounts.");
@@ -323,12 +425,18 @@ namespace ChatbotPart3
                 Console.WriteLine("- Avoid sharing sensitive data via email or unknown websites.");
                 Console.WriteLine("- Look out for fake login pages.");
                 Console.WriteLine("- Install a trusted antivirus tool.");
+
+                // Log the sentiment detection
+                _userProfile.LogActivity("Expressed concern", "Sentiment", "User expressed worry or concern");
             }
             else if (input.Contains("curious") || input.Contains("want to know"))
             {
                 Console.WriteLine("Great curiosity! Here's how to learn more:");
                 Console.WriteLine("- Follow trusted cybersecurity blogs.");
                 Console.WriteLine("- Take a beginner course on platforms like Coursera or Udemy.");
+
+                // Log the sentiment detection
+                _userProfile.LogActivity("Expressed curiosity", "Sentiment", "User expressed curiosity");
             }
             else if (input.Contains("frustrated") || input.Contains("upset") || input.Contains("angry"))
             {
@@ -336,6 +444,9 @@ namespace ChatbotPart3
                 Console.WriteLine("- Break problems into smaller steps.");
                 Console.WriteLine("- Seek help from trusted forums like Stack Overflow or Reddit.");
                 Console.WriteLine("- Ask a friend or colleague for help.");
+
+                // Log the sentiment detection
+                _userProfile.LogActivity("Expressed frustration", "Sentiment", "User expressed frustration or anger");
             }
         }
     }

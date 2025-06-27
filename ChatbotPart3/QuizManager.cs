@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ChatbotPart3
 {
@@ -13,6 +14,27 @@ namespace ChatbotPart3
         private int _currentQuestionIndex;
         private int _correctAnswers;
         private bool _quizInProgress;
+
+        // NLP patterns for quiz commands
+        private readonly Dictionary<string, List<string>> _quizCommandPatterns = new Dictionary<string, List<string>>
+        {
+            {
+                "start_quiz", new List<string>
+                {
+                    "start quiz", "take quiz", "begin quiz", "play quiz", "start a quiz", "take a quiz",
+                    "test my knowledge", "quiz me", "let's do a quiz", "i want to take a quiz",
+                    "can i take a quiz", "give me a quiz", "challenge me", "test me"
+                }
+            },
+            {
+                "quiz_categories", new List<string>
+                {
+                    "quiz categories", "quiz topics", "what quizzes", "quiz options", "available quizzes",
+                    "what categories", "show categories", "show topics", "what topics", "quiz types",
+                    "what kind of quizzes", "what kind of quiz", "quiz list", "list quizzes"
+                }
+            }
+        };
 
         // Feedback messages for different score ranges
         private readonly Dictionary<int, string> _scoreFeedback = new Dictionary<int, string>
@@ -52,6 +74,62 @@ namespace ChatbotPart3
             _quizService = quizService;
             _displayService = displayService;
             _quizInProgress = false;
+        }
+
+        public string ProcessQuizCommand(string input)
+        {
+            // If a quiz is in progress, process the answer
+            if (_quizInProgress)
+            {
+                return ProcessAnswer(input);
+            }
+
+            input = input.ToLower().Trim();
+
+            // Detect command type using NLP patterns
+            string commandType = DetectQuizCommandType(input);
+
+            if (commandType == null && !input.Contains("quiz"))
+                return null; // Not a quiz-related command
+
+            switch (commandType)
+            {
+                case "start_quiz":
+                    // Check if a specific category was requested
+                    foreach (var category in _quizService.GetAvailableCategories())
+                    {
+                        if (input.Contains(category.ToLower()))
+                        {
+                            return StartCategoryQuiz(category);
+                        }
+                    }
+
+                    // Start a general quiz if no specific category
+                    return StartQuiz();
+
+                case "quiz_categories":
+                    return GetAvailableCategories();
+
+                default:
+                    // If it's a quiz-related command but not handled above
+                    if (input.Contains("quiz"))
+                    {
+                        return "🎮 To start a cybersecurity quiz, type 'start quiz' or 'quiz categories' to see specific topics.";
+                    }
+                    return null;
+            }
+        }
+
+        private string DetectQuizCommandType(string input)
+        {
+            foreach (var pattern in _quizCommandPatterns)
+            {
+                if (pattern.Value.Any(phrase => input.Contains(phrase)))
+                {
+                    return pattern.Key;
+                }
+            }
+            return null;
         }
 
         public string StartQuiz(int questionCount = 5)

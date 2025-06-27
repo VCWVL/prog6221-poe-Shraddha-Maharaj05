@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -21,6 +23,21 @@ namespace ChatbotPart3
         private List<string> _userInquiries = new List<string>();
         private string currentState = "askName";
         private string currentTopic = null;
+
+        // NLP patterns for action summary request
+        private readonly List<string> _summaryRequestPatterns = new List<string>
+        {
+            "what have you done", "what did you do", "show me what you've done", "list actions",
+            "show actions", "what tasks", "show my tasks", "what reminders", "show my reminders",
+            "what have you done for me", "what have you helped me with", "show summary", "action summary"
+        };
+
+        // NLP patterns for activity log request
+        private readonly List<string> _activityLogRequestPatterns = new List<string>
+        {
+            "activity log", "show log", "view log", "show activity", "view activity",
+            "show history", "view history", "what have i done", "show actions"
+        };
 
         public MainWindow()
         {
@@ -56,6 +73,8 @@ namespace ChatbotPart3
                 {
                     case "askName":
                         _userProfile.Name = userInput;
+                        // Log the start of the session
+                        _userProfile.LogActivity("Started session", "System", $"User: {_userProfile.Name}");
                         AppendChat(_displayService.GetWelcomeMessageBox(_userProfile.Name));
                         currentState = "askQuestions";
                         AppendChat("Let's begin a few quick questions to get to know your needs.");
@@ -70,6 +89,8 @@ namespace ChatbotPart3
                         if (_questionService.IsQuestionnaireComplete())
                         {
                             currentState = "mainChat";
+                            // Log the completion of the questionnaire
+                            _userProfile.LogActivity("Completed questionnaire", "System", $"Knowledge level: {_userProfile.CyberKnowledgeLevel}, Interests: {_userProfile.InterestAreas}");
                             AppendChat("\nThanks! Here's a summary of what I learned about you:");
                             AppendChat(_userProfile.GetUserSummary());
                             PromptTopics();
@@ -98,6 +119,9 @@ namespace ChatbotPart3
             {
                 if (input == "exit")
                 {
+                    // Log the end of the session
+                    _userProfile.LogActivity("Ended session", "System", "User exited the application");
+
                     AppendChat(_displayService.GetGoodbyeMessage(_userProfile.Name));
                     await Task.Delay(1500);
                     Application.Current.Shutdown();
@@ -109,6 +133,22 @@ namespace ChatbotPart3
                 if (!string.IsNullOrEmpty(reminderAlert))
                 {
                     AppendChat(reminderAlert);
+                }
+
+                // Check for activity log request
+                if (_activityLogRequestPatterns.Any(pattern => input.Contains(pattern)))
+                {
+                    AppendChat(_userProfile.GetActivityLogSummary());
+                    PromptTopics();
+                    return;
+                }
+
+                // Check for action summary request
+                if (IsSummaryRequest(input))
+                {
+                    AppendChat(GenerateActionSummary());
+                    PromptTopics();
+                    return;
                 }
 
                 if (input.Contains("remember") && input.Contains("name"))
@@ -128,15 +168,13 @@ namespace ChatbotPart3
                 }
 
                 // Handle quiz-related commands
-                if (input.Contains("quiz") || _quizManager.IsQuizInProgress())
+                // FIXED: Removed the second parameter (_userProfile)
+                string quizResponse = _quizManager.ProcessQuizCommand(input);
+                if (quizResponse != null)
                 {
-                    string quizResponse = ProcessQuizCommand(input);
-                    if (quizResponse != null)
-                    {
-                        AppendChat(quizResponse);
-                        PromptTopics();
-                        return;
-                    }
+                    AppendChat(quizResponse);
+                    PromptTopics();
+                    return;
                 }
 
                 bool sentimentDetected = DetectSentiment(input);
@@ -149,6 +187,9 @@ namespace ChatbotPart3
                     {
                         AppendChat(_topicService.GetDetailedInfo(currentTopic));
                         HandleFollowUp(currentTopic);
+
+                        // Log the detailed inquiry
+                        _userProfile.LogActivity("Requested details", "Topic", $"Detailed information about {currentTopic}");
                     }
                     else
                     {
@@ -164,6 +205,9 @@ namespace ChatbotPart3
                     currentTopic = topic;
                     _userInquiries.Add(topic);
                     UpdateFavoriteTopic(topic);
+
+                    // Log the topic inquiry
+                    _userProfile.LogActivity("Asked about topic", "Topic", topic);
 
                     AppendChat(GetBasicInfoByTopic(topic));
                     ProvideContextualFollowUp(topic);
@@ -188,59 +232,108 @@ namespace ChatbotPart3
             }
         }
 
-        private string ProcessQuizCommand(string input)
+        private bool IsSummaryRequest(string input)
         {
-            // If a quiz is in progress, process the answer
-            if (_quizManager.IsQuizInProgress())
-            {
-                return _quizManager.ProcessAnswer(input);
-            }
+            return _summaryRequestPatterns.Any(pattern => input.Contains(pattern));
+        }
 
-            // Start a new quiz
-            if (input.Contains("start quiz") || input.Contains("take quiz") || input == "quiz")
+        private string GenerateActionSummary()
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine("📋 Here's a summary of recent actions:");
+
+            // Add task summary
+            int completedTasks = _userProfile.Tasks.Count(t => t.IsCompleted);
+            int pendingTasks = _userProfile.Tasks.Count - completedTasks;
+
+            if (_userProfile.Tasks.Count > 0)
             {
-                // Check if a specific category was requested
-                foreach (var category in _quizService.GetAvailableCategories())
+                sb.AppendLine($"Tasks: {_userProfile.Tasks.Count} total ({completedTasks} completed, {pendingTasks} pending)");
+
+                // List tasks with reminders
+                var tasksWithReminders = _userProfile.Tasks.Where(t => t.ReminderDate.HasValue).ToList();
+                if (tasksWithReminders.Any())
                 {
-                    if (input.Contains(category.ToLower()))
+                    sb.AppendLine("Tasks with reminders:");
+                    int count = 1;
+                    foreach (var task in tasksWithReminders)
                     {
-                        return _quizManager.StartCategoryQuiz(category);
+                        string status = task.IsCompleted ? "✅ Completed" : "🕒 Pending";
+                        sb.AppendLine($"{count++}. {task.Title} - {status}, reminder on {task.ReminderDate?.ToShortDateString()}");
                     }
                 }
-
-                // Start a general quiz if no specific category
-                return _quizManager.StartQuiz();
             }
-
-            // Show available quiz categories
-            if (input.Contains("quiz categories") || input.Contains("quiz topics"))
+            else
             {
-                return _quizManager.GetAvailableCategories();
+                sb.AppendLine("No tasks have been created yet.");
             }
 
-            // If it's a quiz-related command but not handled above
-            if (input.Contains("quiz"))
+            // Add topic inquiries
+            if (_userInquiries.Count > 0)
             {
-                return "🎮 To start a cybersecurity quiz, type 'start quiz' or 'quiz categories' to see specific topics.";
+                sb.AppendLine($"\nTopics you've asked about: {_userInquiries.Count}");
+                var topTopics = _userInquiries
+                    .GroupBy(t => t)
+                    .OrderByDescending(g => g.Count())
+                    .Take(3)
+                    .ToList();
+
+                if (topTopics.Any())
+                {
+                    sb.AppendLine("Most frequently discussed topics:");
+                    foreach (var topic in topTopics)
+                    {
+                        sb.AppendLine($"- {topic.Key} ({topic.Count()} times)");
+                    }
+                }
             }
 
-            return null;
+            // Log the activity
+            _userProfile.LogActivity("Viewed action summary", "System", "Displayed summary of tasks and topics");
+
+            return sb.ToString();
         }
 
         private string DetectTopic(string input)
         {
+            // Enhanced topic detection with NLP
+            // Check for direct topic mentions
             if (input.Contains("phishing")) return "phishing";
             if (input.Contains("password safety") || input.Contains("password")) return "password safety";
             if (input.Contains("suspicious links")) return "suspicious links";
             if (input.Contains("privacy")) return "privacy";
             if (input.Contains("social engineering")) return "social engineering";
             if (input.Contains("identity theft")) return "identity theft";
+
+            // Check for related terms
+            if (Regex.IsMatch(input, @"\b(email|spam|scam|fake email)\b"))
+                return "phishing";
+
+            if (Regex.IsMatch(input, @"\b(password|secure login|credentials|authentication)\b"))
+                return "password safety";
+
+            if (Regex.IsMatch(input, @"\b(url|link|website safety|clicking|suspicious website)\b"))
+                return "suspicious links";
+
+            if (Regex.IsMatch(input, @"\b(private|data protection|information security|personal data)\b"))
+                return "privacy";
+
+            if (Regex.IsMatch(input, @"\b(manipulation|pretexting|baiting|impersonation|trust)\b"))
+                return "social engineering";
+
+            if (Regex.IsMatch(input, @"\b(identity|personal information|stolen identity|fraud)\b"))
+                return "identity theft";
+
             return null;
         }
 
         private bool DetectMoreDetailsRequest(string input)
         {
-            string[] phrases = { "more details", "extra info", "tell me more", "explain further", "more information", "deeper info" };
+            string[] phrases = {
+                "more details", "extra info", "tell me more", "explain further", "more information", "deeper info",
+                "elaborate", "in depth", "details", "specifics", "more about", "additional information",
+                "can you explain", "how does it work", "need more info"
+            };
             return phrases.Any(p => input.Contains(p));
         }
 
@@ -254,18 +347,27 @@ namespace ChatbotPart3
                 AppendChat("- Don't click unknown links.");
                 AppendChat("- Use strong passwords.");
                 AppendChat("- Install antivirus software.");
+
+                // Log the sentiment detection
+                _userProfile.LogActivity("Expressed concern", "Sentiment", "User expressed worry or concern");
                 return true;
             }
 
             if (input.Contains("curious") || input.Contains("interested") || input.Contains("want to know"))
             {
                 AppendChat("💡 Great curiosity! You can explore free cybersecurity courses online.");
+
+                // Log the sentiment detection
+                _userProfile.LogActivity("Expressed curiosity", "Sentiment", "User expressed curiosity");
                 return true;
             }
 
             if (input.Contains("frustrated") || input.Contains("upset") || input.Contains("angry"))
             {
                 AppendChat("💭 Cybersecurity can be overwhelming sometimes. Stay calm and break it down step by step.");
+
+                // Log the sentiment detection
+                _userProfile.LogActivity("Expressed frustration", "Sentiment", "User expressed frustration or anger");
                 return true;
             }
 
@@ -368,6 +470,7 @@ namespace ChatbotPart3
             AppendChat("- Learn about: phishing, password safety, suspicious links, privacy, social engineering, identity theft");
             AppendChat("- Task management: add task, view tasks, complete task, delete task");
             AppendChat("- Take a quiz: start quiz, quiz categories");
+            AppendChat("- View activity: show activity log, what have you done for me");
             AppendChat("Type 'exit' to quit.");
         }
 

@@ -6,7 +6,7 @@ namespace ChatbotPart3
 {
     public class DisplayService
     {
-        // FIX: Add method to resolve 'DisplayAsciiArt' error
+        // method to resolve 'DisplayAsciiArt' error
         public void DisplayAsciiArt()
         {
             Console.ForegroundColor = ConsoleColor.Cyan;
@@ -14,7 +14,7 @@ namespace ChatbotPart3
             Console.ResetColor();
         }
 
-        // FIX: Add method to resolve 'DisplayWelcomeMessage' error
+        // method to resolve 'DisplayWelcomeMessage' error
         public void DisplayWelcomeMessage(string name)
         {
             Console.ForegroundColor = ConsoleColor.DarkCyan;
@@ -22,7 +22,7 @@ namespace ChatbotPart3
             Console.ResetColor();
         }
 
-        // FIX: Add method to resolve 'DisplayGoodbyeMessage' error
+        // method to resolve 'DisplayGoodbyeMessage' error
         public void DisplayGoodbyeMessage(string userName)
         {
             Console.ForegroundColor = ConsoleColor.Green;
@@ -30,7 +30,7 @@ namespace ChatbotPart3
             Console.ResetColor();
         }
 
-        // FIX: Add method to resolve 'DisplayInvalidChoiceMessage' error
+        // method to resolve 'DisplayInvalidChoiceMessage' error
         public void DisplayInvalidChoiceMessage()
         {
             Console.ForegroundColor = ConsoleColor.Red;
