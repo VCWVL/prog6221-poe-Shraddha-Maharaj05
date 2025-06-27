@@ -1,5 +1,4 @@
-﻿using ChatbotPart3;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -14,6 +13,8 @@ namespace ChatbotPart3
         private readonly DisplayService _displayService = new DisplayService();
         private readonly TaskService _taskService = new TaskService();
         private readonly TaskManager _taskManager;
+        private readonly QuizService _quizService;
+        private readonly QuizManager _quizManager;
 
         private UserProfile _userProfile = new UserProfile();
         private List<string> _userInquiries = new List<string>();
@@ -22,6 +23,8 @@ namespace ChatbotPart3
         {
             _taskService = new TaskService();
             _taskManager = new TaskManager(_taskService, _displayService);
+            _quizService = new QuizService();
+            _quizManager = new QuizManager(_quizService, _displayService);
         }
 
         public void Run()
@@ -49,6 +52,7 @@ namespace ChatbotPart3
             Console.WriteLine("\nWhat would you like to learn about?");
             Console.WriteLine("(phishing, password safety, suspicious links, privacy, social engineering, identity theft)");
             Console.WriteLine("You can also manage tasks by saying 'add task', 'view tasks', 'complete task', or 'delete task'");
+            Console.WriteLine("Or test your knowledge with a quiz by typing 'start quiz' or 'quiz categories'");
             Console.WriteLine("Type 'exit' to quit.");
 
             while (true)
@@ -79,6 +83,18 @@ namespace ChatbotPart3
                     Console.WriteLine(taskResponse);
                     Console.WriteLine("\nWhat else would you like to do?");
                     continue;
+                }
+
+                // Handle quiz-related commands
+                if (input.Contains("quiz") || _quizManager.IsQuizInProgress())
+                {
+                    string quizResponse = ProcessQuizCommand(input);
+                    if (quizResponse != null)
+                    {
+                        Console.WriteLine(quizResponse);
+                        Console.WriteLine("\nWhat else would you like to do?");
+                        continue;
+                    }
                 }
 
                 DetectSentiment(input);
@@ -118,6 +134,45 @@ namespace ChatbotPart3
 
                 Console.WriteLine("\nWhat else would you like to learn about?");
             }
+        }
+
+        private string ProcessQuizCommand(string input)
+        {
+            // If a quiz is in progress, process the answer
+            if (_quizManager.IsQuizInProgress())
+            {
+                return _quizManager.ProcessAnswer(input);
+            }
+
+            // Start a new quiz
+            if (input.Contains("start quiz") || input.Contains("take quiz") || input == "quiz")
+            {
+                // Check if a specific category was requested
+                foreach (var category in _quizService.GetAvailableCategories())
+                {
+                    if (input.Contains(category.ToLower()))
+                    {
+                        return _quizManager.StartCategoryQuiz(category);
+                    }
+                }
+
+                // Start a general quiz if no specific category
+                return _quizManager.StartQuiz();
+            }
+
+            // Show available quiz categories
+            if (input.Contains("quiz categories") || input.Contains("quiz topics"))
+            {
+                return _quizManager.GetAvailableCategories();
+            }
+
+            // If it's a quiz-related command but not handled above
+            if (input.Contains("quiz"))
+            {
+                return "🎮 To start a cybersecurity quiz, type 'start quiz' or 'quiz categories' to see specific topics.";
+            }
+
+            return null;
         }
 
         private string DetectTopic(string input)
@@ -205,15 +260,27 @@ namespace ChatbotPart3
                 {
                     case "phishing":
                         AskFollowUp("Here's more about phishing techniques and how to spot them:");
+                        Console.WriteLine("Want to test your knowledge? Type 'start quiz phishing' to take a quiz on this topic!");
                         break;
                     case "password safety":
                         AskFollowUp("Here's some useful advice on using password managers and strong password habits:");
+                        Console.WriteLine("Want to test your knowledge? Type 'start quiz password security' to take a quiz on this topic!");
                         break;
                     case "suspicious links":
                         AskFollowUp("Let's talk about how to detect suspicious links and scams online:");
+                        Console.WriteLine("Want to test your knowledge? Type 'start quiz safe browsing' to take a quiz on this topic!");
                         break;
                     case "privacy":
                         AskFollowUp("Here's more on protecting your privacy on social media and online accounts:");
+                        Console.WriteLine("Want to test your knowledge? Type 'start quiz data protection' to take a quiz on this topic!");
+                        break;
+                    case "social engineering":
+                        AskFollowUp("Here's more about social engineering tactics and how to avoid them:");
+                        Console.WriteLine("Want to test your knowledge? Type 'start quiz social engineering' to take a quiz on this topic!");
+                        break;
+                    case "identity theft":
+                        AskFollowUp("Here's more about protecting yourself from identity theft:");
+                        Console.WriteLine("Want to test your knowledge? Type 'start quiz data protection' to take a quiz on this topic!");
                         break;
                 }
             }

@@ -14,6 +14,8 @@ namespace ChatbotPart3
         private readonly DisplayService _displayService = new DisplayService();
         private readonly TaskService _taskService = new TaskService();
         private readonly TaskManager _taskManager;
+        private readonly QuizService _quizService = new QuizService();
+        private readonly QuizManager _quizManager;
 
         private UserProfile _userProfile = new UserProfile();
         private List<string> _userInquiries = new List<string>();
@@ -24,6 +26,7 @@ namespace ChatbotPart3
         {
             InitializeComponent();
             _taskManager = new TaskManager(_taskService, _displayService);
+            _quizManager = new QuizManager(_quizService, _displayService);
             StartChat();
         }
 
@@ -124,6 +127,18 @@ namespace ChatbotPart3
                     return;
                 }
 
+                // Handle quiz-related commands
+                if (input.Contains("quiz") || _quizManager.IsQuizInProgress())
+                {
+                    string quizResponse = ProcessQuizCommand(input);
+                    if (quizResponse != null)
+                    {
+                        AppendChat(quizResponse);
+                        PromptTopics();
+                        return;
+                    }
+                }
+
                 bool sentimentDetected = DetectSentiment(input);
                 bool askedForMoreDetails = DetectMoreDetailsRequest(input);
                 string topic = DetectTopic(input);
@@ -171,6 +186,45 @@ namespace ChatbotPart3
                 AppendChat("🚨 An unexpected error occurred during the chat.");
                 Console.WriteLine($"Chat error: {ex.Message}");
             }
+        }
+
+        private string ProcessQuizCommand(string input)
+        {
+            // If a quiz is in progress, process the answer
+            if (_quizManager.IsQuizInProgress())
+            {
+                return _quizManager.ProcessAnswer(input);
+            }
+
+            // Start a new quiz
+            if (input.Contains("start quiz") || input.Contains("take quiz") || input == "quiz")
+            {
+                // Check if a specific category was requested
+                foreach (var category in _quizService.GetAvailableCategories())
+                {
+                    if (input.Contains(category.ToLower()))
+                    {
+                        return _quizManager.StartCategoryQuiz(category);
+                    }
+                }
+
+                // Start a general quiz if no specific category
+                return _quizManager.StartQuiz();
+            }
+
+            // Show available quiz categories
+            if (input.Contains("quiz categories") || input.Contains("quiz topics"))
+            {
+                return _quizManager.GetAvailableCategories();
+            }
+
+            // If it's a quiz-related command but not handled above
+            if (input.Contains("quiz"))
+            {
+                return "🎮 To start a cybersecurity quiz, type 'start quiz' or 'quiz categories' to see specific topics.";
+            }
+
+            return null;
         }
 
         private string DetectTopic(string input)
@@ -231,21 +285,27 @@ namespace ChatbotPart3
             {
                 case "phishing":
                     AppendChat("🛡️ Context tip: Spear phishing uses personal info to trick you. Always double-check email authenticity.");
+                    AppendChat("Want to test your knowledge? Type 'start quiz phishing' to take a quiz on this topic!");
                     break;
                 case "password safety":
                     AppendChat("🔐 Context tip: Use a password manager and avoid reusing passwords.");
+                    AppendChat("Want to test your knowledge? Type 'start quiz password security' to take a quiz on this topic!");
                     break;
                 case "suspicious links":
                     AppendChat("🔗 Context tip: Hover over links before clicking. Check for misspellings in URLs.");
+                    AppendChat("Want to test your knowledge? Type 'start quiz safe browsing' to take a quiz on this topic!");
                     break;
                 case "privacy":
                     AppendChat("🔒 Context tip: Lock down your social media privacy settings and limit app permissions.");
+                    AppendChat("Want to test your knowledge? Type 'start quiz data protection' to take a quiz on this topic!");
                     break;
                 case "social engineering":
                     AppendChat("🎭 Context tip: Never trust requests for sensitive data over calls or emails without verification.");
+                    AppendChat("Want to test your knowledge? Type 'start quiz social engineering' to take a quiz on this topic!");
                     break;
                 case "identity theft":
                     AppendChat("🆔 Context tip: Monitor your credit reports and use identity protection services.");
+                    AppendChat("Want to test your knowledge? Type 'start quiz data protection' to take a quiz on this topic!");
                     break;
             }
         }
@@ -307,6 +367,7 @@ namespace ChatbotPart3
             AppendChat("What would you like to do next?");
             AppendChat("- Learn about: phishing, password safety, suspicious links, privacy, social engineering, identity theft");
             AppendChat("- Task management: add task, view tasks, complete task, delete task");
+            AppendChat("- Take a quiz: start quiz, quiz categories");
             AppendChat("Type 'exit' to quit.");
         }
 
