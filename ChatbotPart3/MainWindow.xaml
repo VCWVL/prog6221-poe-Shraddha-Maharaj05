@@ -1,7 +1,15 @@
 ﻿<Window x:Class="ChatbotPart3.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="CyberBot" Height="600" Width="800" ResizeMode="CanResize">
+        Title="CyberBot" Height="600" Width="800" ResizeMode="CanResize"
+        Background="{DynamicResource {x:Static SystemColors.WindowFrameBrushKey}}">
+    <Window.Resources>
+        <!-- Define some custom colors with WPF named brushes -->
+        <SolidColorBrush x:Key="CyberGreen" Color="Lime"/>
+        <SolidColorBrush x:Key="DarkPanelBg" Color="#FF202020"/>
+        <SolidColorBrush x:Key="MidPanelBg" Color="#FF303030"/>
+    </Window.Resources>
+
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -12,35 +20,56 @@
             <!-- Input -->
         </Grid.RowDefinitions>
 
-        <TextBlock Text="CyberBot Chat"
+        <!-- Title -->
+        <TextBlock Text="CyberBot" 
                    FontSize="24"
                    FontWeight="Bold"
                    Margin="0,0,0,10"
-                   Grid.Row="0"/>
+                   Grid.Row="0"
+                   Foreground="{StaticResource CyberGreen}"
+                   TextAlignment="Center"/>
 
-        <TextBox x:Name="ChatTextBox"
-                 Grid.Row="1"
-                 FontSize="14"
-                 TextWrapping="Wrap"
-                 IsReadOnly="True"
-                 VerticalScrollBarVisibility="Auto"
-                 AcceptsReturn="True"
-                 Background="White"
-                 BorderThickness="0"
-                 VerticalAlignment="Stretch"
-                 HorizontalAlignment="Stretch"
-                 Margin="0,0,0,5"/>
+        <!-- Chat Display -->
+        <Border Grid.Row="1"
+                CornerRadius="4"
+                BorderBrush="{StaticResource CyberGreen}"
+                BorderThickness="1"
+                Background="{StaticResource DarkPanelBg}"
+                Padding="5">
+            <TextBox x:Name="ChatTextBox"
+                     FontSize="14"
+                     TextWrapping="Wrap"
+                     IsReadOnly="True"
+                     VerticalScrollBarVisibility="Auto"
+                     AcceptsReturn="True"
+                     Background="Transparent"
+                     Foreground="White"
+                     BorderThickness="0"/>
+        </Border>
 
-        <DockPanel Grid.Row="2" Margin="0,10,0,0">
-            <TextBox x:Name="UserInputBox"
-                     Height="30"
-                     Margin="0,0,10,0"
-                     VerticalAlignment="Center"
-                     DockPanel.Dock="Left"
-                     Width="660"/>
+        <!-- Input Panel -->
+        <DockPanel Grid.Row="2" Margin="0,10,0,0" LastChildFill="False">
+            <Border CornerRadius="4"
+                    BorderBrush="{StaticResource CyberGreen}"
+                    BorderThickness="1"
+                    Background="{StaticResource MidPanelBg}"
+                    Margin="0,0,10,0">
+                <TextBox x:Name="UserInputBox"
+                         Height="30"
+                         VerticalAlignment="Center"
+                         Width="660"
+                         Background="Transparent"
+                         Foreground="White"
+                         BorderThickness="0"
+                         Padding="5"/>
+            </Border>
+
             <Button Content="Send"
                     Width="80"
                     Height="30"
+                    Background="{StaticResource CyberGreen}"
+                    Foreground="Black"
+                    FontWeight="Bold"
                     Click="SendButton_Click"/>
         </DockPanel>
     </Grid>

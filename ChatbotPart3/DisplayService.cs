@@ -1,6 +1,7 @@
 ﻿using ChatbotPart3;
 using System;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace ChatbotPart3
 {
@@ -15,10 +16,10 @@ namespace ChatbotPart3
         }
 
         // method to resolve 'DisplayWelcomeMessage' error
-        public void DisplayWelcomeMessage(string name)
+        public async Task DisplayWelcomeMessageAsync(string name)
         {
             Console.ForegroundColor = ConsoleColor.DarkCyan;
-            Console.WriteLine(GetWelcomeMessageBox(name));
+            await TypeOutMessage(GetWelcomeMessageBox(name));
             Console.ResetColor();
         }
 
@@ -42,15 +43,16 @@ namespace ChatbotPart3
         public string GetAsciiArt()
         {
             return @"
-  ______   ______  _____ ____  ____  _____ ____ _   _ ____  ___ _______   __        .----.
- / ___\ \ / / __ )| ____|  _ \/ ___|| ____/ ___| | | |  _ \|_ _|_   _\ \ / /       / .--. \
-| |    \ V /|  _ \|  _| | |_) \___ \|  _|| |   | | | | |_) || |  | |  \ V /       | |    | |
-| |___  | | | |_) | |___|  _ < ___) | |__| |___| |_| |  _ < | |  | |   | |        | |____| |
- \____| |_| |____/|_____|_| \_\____/|_____\____|\___/|_| \_\___| |_|_ _|_|_       |  ____  |
-   / \ \      / / \  |  _ \| ____| \ | | ____/ ___/ ___|  | __ ) / _ \_   _|      | |    | |
-  / _ \ \ /\ / / _ \ | |_) |  _| |  \| |  _| \___ \___ \  |  _ \| | | || |        | | -- | |
- / ___ \ V  V / ___ \|  _ <| |___| |\  | |___ ___) |__) | | |_) | |_| || |        | |____| |
-/_/   \_\_/\_/_/   \_\_| \_\_____|_| \_|_____|____/____/  |____/ \___/ |_|        |________|                                                                  
+   ______   ______  _____ ____  ____  _____ ____ _   _ ____  ___ _______   __
+  / ___\ \ / / __ )| ____|  _ \/ ___|| ____/ ___| | | |  _ \|_ _|_   _\ \ / /
+ | |    \ V /|  _ \|  _| | |_) \___ \|  _|| |   | | | | |_) || |  | |  \ V / 
+ | |___  | | | |_) | |___|  _ < ___) | |__| |___| |_| |  _ < | |  | |   | |  
+  \____| |_| |____/|_____|_| \_\____/|_____\____|\___/|_| \_\___| |_|   |_|
+     _ _        _ _   _____ ________  __ _______________       _____   _ _ _ _ _ 
+    / \ \      / / \  |  _ \| ____| \ | | ____/ ___/ ___|      | __ ) / _ \_   _|
+   / _ \ \ /\ / / _ \ | |_) |  _| |  \| |  _| \___ \___ \      |  _ \| | | || |  
+  / ___ \ V  V / ___ \|  _ <| |___| |\  | |___ ___) |__) |     | |_) | |_| || |  
+ /_/   \_\_/\_/_/   \_\_| \_\_____|_| \_|_____|____/____/      |____/ \___/ |_|  
 ";
         }
 
@@ -121,6 +123,17 @@ namespace ChatbotPart3
                                 ConsoleColor.Red : ConsoleColor.Cyan;
 
             return GetTipsBox(lines, color);
+        }
+
+        // Method to simulate typing out a message
+        private async Task TypeOutMessage(string message)
+        {
+            foreach (char c in message)
+            {
+                Console.Write(c);
+                await Task.Delay(50); // Adjust the delay for typing speed
+            }
+            Console.WriteLine(); // Move to the next line after the message
         }
     }
 }

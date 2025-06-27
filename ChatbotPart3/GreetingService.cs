@@ -17,9 +17,10 @@ namespace ChatbotPart3
                 var player = new SoundPlayer("welcome.wav");
                 player.Play();
             }
-            catch
+            catch (Exception ex)
             {
                 // Handle or ignore missing sound file gracefully
+                Console.WriteLine($"Error playing welcome sound: {ex.Message}");
             }
         }
     }

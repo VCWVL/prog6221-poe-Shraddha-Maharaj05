@@ -74,7 +74,7 @@ namespace ChatbotPart3
             "password", "2fa", "two factor", "authentication", "backup", "update", "patch",
             "privacy", "settings", "scan", "virus", "malware", "firewall", "security",
             "encryption", "vpn", "phishing", "suspicious", "links", "email", "social engineering",
-            "identity theft", "data breach", "secure", "protect", "antivirus"
+            "identity theft", "data breach", "secure", "protect", "antivirus", "review", "check"
         };
 
         public TaskManager(TaskService taskService, DisplayService displayService)
@@ -88,81 +88,43 @@ namespace ChatbotPart3
             input = input.ToLower().Trim();
 
             // Special handling for activity log request
-            if (_taskCommandPatterns["activity_log"].Any(pattern => input.Contains(pattern)) ||
-                input.Contains("show") && input.Contains("log") ||
-                input.Contains("what have you done for me"))
+            if (IsActivityLogRequest(input))
             {
                 return userProfile.GetActivityLogSummary();
             }
 
-            // Special handling for "Show me my tasks" and similar phrases
-            if (input.Contains("show") && input.Contains("task") ||
-                input.Contains("view") && input.Contains("task") ||
-                input.Contains("list") && input.Contains("task") ||
-                input.Contains("what") && input.Contains("task") && input.Contains("have"))
+            // Special handling for task viewing requests
+            if (IsViewTasksRequest(input))
             {
                 userProfile.LogActivity("Viewed task list", "Task", "Displayed all tasks");
                 return _taskService.ViewTasks(userProfile);
             }
 
-            // Special handling for "I finished task X" pattern
-            if ((input.Contains("finish") || input.Contains("complete") || input.Contains("done")) &&
-                (input.Contains("first") || input.Contains("1")))
-            {
-                if (userProfile.Tasks.Count > 0)
-                {
-                    userProfile.LogActivity("Completed task", "Task", $"Marked '{userProfile.Tasks[0].Title}' as completed");
-                    return _taskService.MarkTaskComplete(userProfile, 0); // First task (index 0)
-                }
-            }
-
-            if ((input.Contains("finish") || input.Contains("complete") || input.Contains("done")) &&
-                (input.Contains("second") || input.Contains("2")))
-            {
-                if (userProfile.Tasks.Count > 1)
-                {
-                    userProfile.LogActivity("Completed task", "Task", $"Marked '{userProfile.Tasks[1].Title}' as completed");
-                    return _taskService.MarkTaskComplete(userProfile, 1); // Second task (index 1)
-                }
-            }
-
             // Detect command type using NLP patterns
             string commandType = DetectTaskCommandType(input);
+            if (commandType == null) return null; // Not a task-related command
 
-            if (commandType == null)
-                return null; // Not a task-related command
-
-            switch (commandType)
+            return commandType switch
             {
-                case "add_task":
-                    return HandleAddTask(userProfile, input);
-                case "view_tasks":
-                    userProfile.LogActivity("Viewed task list", "Task", "Displayed all tasks");
-                    return _taskService.ViewTasks(userProfile);
-                case "complete_task":
-                    return HandleCompleteTask(userProfile, input);
-                case "delete_task":
-                    return HandleDeleteTask(userProfile, input);
-                case "set_reminder":
-                    return HandleSetReminder(userProfile, input);
-                case "task_help":
-                    userProfile.LogActivity("Viewed task help", "Task", "Displayed task help information");
-                    return GetTaskHelpText();
-                default:
-                    return null;
-            }
+                "add_task" => HandleAddTask(userProfile, input),
+                "complete_task" => HandleCompleteTask(userProfile, input),
+                "delete_task" => HandleDeleteTask(userProfile, input),
+                "set_reminder" => HandleSetReminder(userProfile, input),
+                "task_help" => HandleTaskHelp(),
+                _ => null
+            };
         }
 
-        private string DetectTaskCommandType(string input)
+        private bool IsActivityLogRequest(string input)
         {
-            foreach (var pattern in _taskCommandPatterns)
-            {
-                if (pattern.Value.Any(phrase => input.Contains(phrase)))
-                {
-                    return pattern.Key;
-                }
-            }
-            return null;
+            return _taskCommandPatterns["activity_log"].Any(pattern => input.Contains(pattern)) ||
+                   (input.Contains("show") && input.Contains("log")) ||
+                   input.Contains("what have you done for me");
+        }
+
+        private bool IsViewTasksRequest(string input)
+        {
+            return _taskCommandPatterns["view_tasks"].Any(pattern => input.Contains(pattern));
         }
 
         private string HandleAddTask(UserProfile userProfile, string input)
@@ -176,12 +138,7 @@ namespace ChatbotPart3
             }
 
             // Check if the input includes reminder information
-            DateTime? reminderDate = null;
-            int daysForReminder = ExtractDaysFromInput(input);
-            if (daysForReminder > 0)
-            {
-                reminderDate = DateTime.Now.AddDays(daysForReminder);
-            }
+            DateTime? reminderDate = ExtractReminderDate(input);
 
             // Generate a description based on the title
             string description = GenerateTaskDescription(title);
@@ -193,132 +150,72 @@ namespace ChatbotPart3
             // Add the task with reminder if specified
             return _taskService.AddTask(userProfile, title, description, reminderDate);
         }
+
+        private DateTime? ExtractReminderDate(string input)
+        {
+            int daysForReminder = ExtractDaysFromInput(input);
+            return daysForReminder > 0 ? DateTime.Now.AddDays(daysForReminder) : (DateTime?)null;
+        }
+
         private string HandleCompleteTask(UserProfile userProfile, string input)
         {
             int taskIndex = ExtractTaskNumber(input) - 1; // Convert to zero-based index
-
             if (taskIndex < 0 || taskIndex >= userProfile.Tasks.Count)
             {
                 return "❌ Invalid task number. Use 'View tasks' to see your task list with numbers.";
             }
 
-            // Log the activity
             userProfile.LogActivity("Completed task", "Task", $"Marked '{userProfile.Tasks[taskIndex].Title}' as completed");
-
             return _taskService.MarkTaskComplete(userProfile, taskIndex);
         }
 
         private string HandleDeleteTask(UserProfile userProfile, string input)
         {
             int taskIndex = ExtractTaskNumber(input) - 1; // Convert to zero-based index
-
             if (taskIndex < 0 || taskIndex >= userProfile.Tasks.Count)
             {
                 return "❌ Invalid task number. Use 'View tasks' to see your task list with numbers.";
             }
 
-            // Log the activity before deleting the task
             string taskTitle = userProfile.Tasks[taskIndex].Title;
             userProfile.LogActivity("Deleted task", "Task", $"Removed '{taskTitle}'");
-
             return _taskService.DeleteTask(userProfile, taskIndex);
         }
 
         private string HandleSetReminder(UserProfile userProfile, string input)
         {
-            // Check if this is a new task with reminder
-            if (ContainsAddTaskPattern(input))
-            {
-                string title = ExtractTaskTitle(input);
-                if (!string.IsNullOrWhiteSpace(title))
-                {
-                    string description = GenerateTaskDescription(title);
-                    int daysForTask = ExtractDaysFromInput(input);
-                    DateTime? taskReminderDate = daysForTask > 0 ? DateTime.Now.AddDays(daysForTask) : null;
-
-                    // Log the activity
-                    string reminderInfo = taskReminderDate.HasValue ? $" with reminder for {taskReminderDate.Value.ToShortDateString()}" : "";
-                    userProfile.LogActivity("Added task", "Task", $"'{title}'{reminderInfo}");
-
-                    return _taskService.AddTask(userProfile, title, description, taskReminderDate);
-                }
-            }
-
-            // Handle "Remind me about that" pattern - use the most recently added task
-            if (input.Contains("that") && userProfile.Tasks.Count > 0)
-            {
-                int dayCount = ExtractDaysFromInput(input);
-                if (dayCount > 0)
-                {
-                    int lastTaskIndex = userProfile.Tasks.Count - 1;
-                    DateTime taskReminderDate = DateTime.Now.AddDays(dayCount);
-                    userProfile.Tasks[lastTaskIndex].ReminderDate = taskReminderDate;
-
-                    // Log the activity
-                    userProfile.LogActivity("Set reminder", "Reminder", $"For '{userProfile.Tasks[lastTaskIndex].Title}' on {taskReminderDate.ToShortDateString()}");
-
-                    return $"⏰ Reminder set for \"{userProfile.Tasks[lastTaskIndex].Title}\" on {userProfile.Tasks[lastTaskIndex].ReminderDate?.ToShortDateString()}";
-                }
-            }
-
             int taskIndex = ExtractTaskNumber(input) - 1; // Convert to zero-based index
-
-            // If no task number is specified but we have tasks, assume the most recent task
-            if (taskIndex < 0 && userProfile.Tasks.Count > 0)
-            {
-                taskIndex = userProfile.Tasks.Count - 1;
-            }
-
             if (taskIndex < 0 || taskIndex >= userProfile.Tasks.Count)
             {
                 return "❌ Please specify which task to set a reminder for. Example: 'Remind me about task 2 in 3 days'";
             }
 
-            // Extract days from input (e.g., "in 3 days" or "in 1 week")
-            int dayValue = ExtractDaysFromInput(input);
-
-            if (dayValue <= 0)
+            DateTime? reminderDate = ExtractReminderDate(input);
+            if (!reminderDate.HasValue)
             {
-                return "Please specify when to remind you. Example: 'Remind me about task 2 in 3 days'";
+                return "❌ Please specify when to remind you. Example: 'Remind me about task 2 in 3 days'";
             }
 
-            // Set the reminder date
-            DateTime reminderDate = DateTime.Now.AddDays(dayValue);
             userProfile.Tasks[taskIndex].ReminderDate = reminderDate;
-
-            // Log the activity
-            userProfile.LogActivity("Set reminder", "Reminder", $"For '{userProfile.Tasks[taskIndex].Title}' on {reminderDate.ToShortDateString()}");
-
-            return $"⏰ Reminder set for \"{userProfile.Tasks[taskIndex].Title}\" on {userProfile.Tasks[taskIndex].ReminderDate?.ToShortDateString()}";
+            userProfile.LogActivity("Set reminder", "Reminder", $"For '{userProfile.Tasks[taskIndex].Title}' on {reminderDate.Value.ToShortDateString()}");
+            return $"⏰ Reminder set for \"{userProfile.Tasks[taskIndex].Title}\" on {reminderDate.Value.ToShortDateString()}";
         }
 
-        private bool ContainsAddTaskPattern(string input)
+        private string HandleTaskHelp()
         {
-            return _taskCommandPatterns["add_task"].Any(pattern => input.Contains(pattern));
+            return GetTaskHelpText();
         }
 
-        public string CheckForDueReminders(UserProfile userProfile)
+        private string DetectTaskCommandType(string input)
         {
-            var dueReminders = userProfile.Tasks
-                .Where(t => !t.IsCompleted && t.ReminderDate.HasValue && t.ReminderDate.Value.Date <= DateTime.Now.Date)
-                .ToList();
-
-            if (dueReminders.Count == 0)
-                return null;
-
-            StringBuilder sb = new StringBuilder();
-            sb.AppendLine("⏰ **Reminder Alert** ⏰");
-            sb.AppendLine("The following tasks are due today:");
-
-            foreach (var task in dueReminders)
+            foreach (var pattern in _taskCommandPatterns)
             {
-                sb.AppendLine($"- {task.Title}: {task.Description}");
+                if (pattern.Value.Any(phrase => input.Contains(phrase)))
+                {
+                    return pattern.Key;
+                }
             }
-
-            // Log the activity
-            userProfile.LogActivity("Reminder alert", "Reminder", $"{dueReminders.Count} tasks due today");
-
-            return sb.ToString();
+            return null;
         }
 
         private string ExtractTaskTitle(string input)
@@ -336,7 +233,6 @@ namespace ChatbotPart3
             }
 
             // Use NLP to extract task title
-            // First, remove known command patterns
             string cleanedInput = input;
 
             // Special handling for "need to remember" pattern
@@ -371,7 +267,7 @@ namespace ChatbotPart3
             }
 
             // Remove common filler words
-            string[] fillerWords = { "please", "could you", "can you", "i want to", "i need to", "about", "for me", "for", "to" };
+            string[] fillerWords = { "please", "could you", "can you", "i want to", "i need to", "about", "for me", "for", "to", "?" };
             foreach (var word in fillerWords)
             {
                 cleanedInput = cleanedInput.Replace(word, "").Trim();
@@ -513,12 +409,41 @@ namespace ChatbotPart3
             {
                 return "Run a security scan to check for malware or viruses on your devices.";
             }
+            else if (title.Contains("review") || title.Contains("check"))
+            {
+                return "Review your current settings and ensure they align with best practices for security.";
+            }
             else
             {
                 return $"Complete this cybersecurity task to improve your online safety.";
             }
         }
 
+        public string CheckForDueReminders(UserProfile userProfile)
+        {
+            var dueReminders = userProfile.Tasks
+                .Where(t => !t.IsCompleted && t.ReminderDate.HasValue && t.ReminderDate.Value.Date <= DateTime.Now.Date)
+                .ToList();
+
+            if (dueReminders.Count == 0)
+                return null;
+
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine("⏰ **Reminder Alert** ⏰");
+            sb.AppendLine("The following tasks are due today:");
+
+            foreach (var task in dueReminders)
+            {
+                sb.AppendLine($"- {task.Title}: {task.Description}");
+            }
+
+            // Log the activity
+            userProfile.LogActivity("Reminder alert", "Reminder", $"{dueReminders.Count} tasks due today");
+
+            return sb.ToString();
+        }
+
+        // Task guidance to user
         private string GetTaskHelpText()
         {
             StringBuilder sb = new StringBuilder();

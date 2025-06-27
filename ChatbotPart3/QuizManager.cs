@@ -8,12 +8,12 @@ namespace ChatbotPart3
 {
     public class QuizManager
     {
-        private readonly QuizService _quizService;
-        private readonly DisplayService _displayService;
-        private List<QuizQuestion> _currentQuizQuestions;
-        private int _currentQuestionIndex;
-        private int _correctAnswers;
-        private bool _quizInProgress;
+        private readonly QuizService _quizService; // Service to manage quiz questions
+        private readonly DisplayService _displayService; // Service to handle display output
+        private List<QuizQuestion> _currentQuizQuestions; // List of questions for the current quiz
+        private int _currentQuestionIndex; // Index of the current question being answered
+        private int _correctAnswers; // Count of correct answers given by the user
+        private bool _quizInProgress; // Flag to check if a quiz is currently active
 
         // NLP patterns for quiz commands
         private readonly Dictionary<string, List<string>> _quizCommandPatterns = new Dictionary<string, List<string>>
@@ -67,15 +67,17 @@ namespace ChatbotPart3
             "❌ Not this time. The correct answer is"
         };
 
-        private readonly Random _random = new Random();
+        private readonly Random _random = new Random(); // Random number generator for feedback selection
 
+        // Constructor to initialize QuizManager with services
         public QuizManager(QuizService quizService, DisplayService displayService)
         {
             _quizService = quizService;
             _displayService = displayService;
-            _quizInProgress = false;
+            _quizInProgress = false; // Initialize quiz status
         }
 
+        // Process user input for quiz commands
         public string ProcessQuizCommand(string input)
         {
             // If a quiz is in progress, process the answer
@@ -84,7 +86,7 @@ namespace ChatbotPart3
                 return ProcessAnswer(input);
             }
 
-            input = input.ToLower().Trim();
+            input = input.ToLower().Trim(); // Normalize input
 
             // Detect command type using NLP patterns
             string commandType = DetectQuizCommandType(input);
@@ -100,7 +102,7 @@ namespace ChatbotPart3
                     {
                         if (input.Contains(category.ToLower()))
                         {
-                            return StartCategoryQuiz(category);
+                            return StartCategoryQuiz(category); // Start quiz for the specific category
                         }
                     }
 
@@ -108,7 +110,7 @@ namespace ChatbotPart3
                     return StartQuiz();
 
                 case "quiz_categories":
-                    return GetAvailableCategories();
+                    return GetAvailableCategories(); // Return available quiz categories
 
                 default:
                     // If it's a quiz-related command but not handled above
@@ -116,152 +118,161 @@ namespace ChatbotPart3
                     {
                         return "🎮 To start a cybersecurity quiz, type 'start quiz' or 'quiz categories' to see specific topics.";
                     }
-                    return null;
+                    return null; // No valid command found
             }
         }
 
+        // Detect the type of quiz command from user input
         private string DetectQuizCommandType(string input)
         {
             foreach (var pattern in _quizCommandPatterns)
             {
                 if (pattern.Value.Any(phrase => input.Contains(phrase)))
                 {
-                    return pattern.Key;
+                    return pattern.Key; // Return the command type if a match is found
                 }
             }
-            return null;
+            return null; // No command type detected
         }
 
+        // Start a general quiz with a specified number of questions
         public string StartQuiz(int questionCount = 5)
         {
-            _currentQuizQuestions = _quizService.GetRandomQuestions(questionCount);
-            _currentQuestionIndex = 0;
-            _correctAnswers = 0;
-            _quizInProgress = true;
+            _currentQuizQuestions = _quizService.GetRandomQuestions(questionCount); // Get random questions
+            _currentQuestionIndex = 0; // Reset question index
+            _correctAnswers = 0; // Reset correct answers count
+            _quizInProgress = true; // Set quiz status to in progress
 
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("🎮 Welcome to the Cybersecurity Quiz! 🎮");
             sb.AppendLine($"I'll ask you {_currentQuizQuestions.Count} questions about cybersecurity.");
             sb.AppendLine("Answer by typing the letter (A, B, C, D) or number (1, 2, 3, 4) of your choice.");
             sb.AppendLine();
-            sb.AppendLine(GetCurrentQuestion());
+            sb.AppendLine(GetCurrentQuestion()); // Display the first question
 
-            return sb.ToString();
+            return sb.ToString(); // Return the quiz introduction
         }
 
+        // Start a quiz for a specific category
         public string StartCategoryQuiz(string category, int questionCount = 5)
         {
-            _currentQuizQuestions = _quizService.GetQuestionsByCategory(category, questionCount);
-            _currentQuestionIndex = 0;
-            _correctAnswers = 0;
-            _quizInProgress = true;
+            _currentQuizQuestions = _quizService.GetQuestionsByCategory(category, questionCount); // Get questions for the category
+            _currentQuestionIndex = 0; // Reset question index
+            _correctAnswers = 0; // Reset correct answers count
+            _quizInProgress = true; // Set quiz status to in progress
 
             StringBuilder sb = new StringBuilder();
             sb.AppendLine($"🎮 Welcome to the {category} Quiz! 🎮");
             sb.AppendLine($"I'll ask you {_currentQuizQuestions.Count} questions about {category.ToLower()}.");
             sb.AppendLine("Answer by typing the letter (A, B, C, D) or number (1, 2, 3, 4) of your choice.");
             sb.AppendLine();
-            sb.AppendLine(GetCurrentQuestion());
+            sb.AppendLine(GetCurrentQuestion()); // Display the first question
 
-            return sb.ToString();
+            return sb.ToString(); // Return the category quiz introduction
         }
 
+        // Process the user's answer to the current question
         public string ProcessAnswer(string answer)
         {
             if (!_quizInProgress)
             {
-                return "There's no active quiz. Type 'start quiz' to begin!";
+                return "There's no active quiz. Type 'start quiz' to begin!"; // Prompt to start a quiz if none is active
             }
 
-            QuizQuestion currentQuestion = _currentQuizQuestions[_currentQuestionIndex];
-            bool isCorrect = currentQuestion.IsCorrectAnswer(answer);
+            QuizQuestion currentQuestion = _currentQuizQuestions[_currentQuestionIndex]; // Get the current question
+            bool isCorrect = currentQuestion.IsCorrectAnswer(answer); // Check if the answer is correct
 
             StringBuilder sb = new StringBuilder();
 
             if (isCorrect)
             {
-                sb.AppendLine(GetRandomFeedback(true));
-                _correctAnswers++;
+                sb.AppendLine(GetRandomFeedback(true)); // Provide positive feedback
+                _correctAnswers++; // Increment correct answers count
             }
             else
             {
-                sb.AppendLine($"{GetRandomFeedback(false)} {currentQuestion.GetCorrectAnswerLetter()}) {currentQuestion.GetCorrectAnswerText()}");
+                sb.AppendLine($"{GetRandomFeedback(false)} {currentQuestion.GetCorrectAnswerLetter()}) {currentQuestion.GetCorrectAnswerText()}"); // Provide negative feedback with correct answer
             }
 
-            sb.AppendLine(currentQuestion.Explanation);
+            sb.AppendLine(currentQuestion.Explanation); // Provide explanation for the answer
 
-            _currentQuestionIndex++;
+            _currentQuestionIndex++; // Move to the next question
 
             if (_currentQuestionIndex < _currentQuizQuestions.Count)
             {
                 sb.AppendLine();
-                sb.AppendLine(GetCurrentQuestion());
+                sb.AppendLine(GetCurrentQuestion()); // Display the next question
             }
             else
             {
                 sb.AppendLine();
-                sb.AppendLine(GetQuizResults());
-                _quizInProgress = false;
+                sb.AppendLine(GetQuizResults()); // Display quiz results if all questions have been answered
+                _quizInProgress = false; // End the quiz
             }
 
-            return sb.ToString();
+            return sb.ToString(); // Return the response
         }
 
+        // Check if a quiz is currently in progress
         public bool IsQuizInProgress()
         {
-            return _quizInProgress;
+            return _quizInProgress; // Return the quiz status
         }
 
+        // Get available quiz categories
         public string GetAvailableCategories()
         {
-            var categories = _quizService.GetAvailableCategories();
+            var categories = _quizService.GetAvailableCategories(); // Retrieve available categories
 
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("📚 Available Quiz Categories:");
 
             foreach (var category in categories)
             {
-                sb.AppendLine($"- {category}");
+                sb.AppendLine($"- {category}"); // List each category
             }
 
             sb.AppendLine();
             sb.AppendLine("Type 'start quiz [category]' to begin a category quiz, or just 'start quiz' for a mixed quiz.");
 
-            return sb.ToString();
+            return sb.ToString(); // Return the list of categories
         }
 
+        // Get the current question to display
         private string GetCurrentQuestion()
         {
             if (_currentQuestionIndex >= _currentQuizQuestions.Count)
             {
-                return "No more questions!";
+                return "No more questions!"; // Return message if no questions are left
             }
 
-            QuizQuestion question = _currentQuizQuestions[_currentQuestionIndex];
+            QuizQuestion question = _currentQuizQuestions[_currentQuestionIndex]; // Get the current question
 
             StringBuilder sb = new StringBuilder();
             sb.AppendLine($"Question {_currentQuestionIndex + 1} of {_currentQuizQuestions.Count}:");
-            sb.AppendLine(question.GetFormattedQuestion());
+            sb.AppendLine(question.GetFormattedQuestion()); // Format and display the current question
 
-            return sb.ToString();
+            return sb.ToString(); // Return the current question
         }
 
+        // Get the results of the quiz after completion
         private string GetQuizResults()
         {
-            int percentage = (_correctAnswers * 100) / _currentQuizQuestions.Count;
-            string feedback = GetScoreFeedback(percentage);
+            int percentage = (_correctAnswers * 100) / _currentQuizQuestions.Count; // Calculate score percentage
+            string feedback = GetScoreFeedback(percentage); // Get feedback based on score
 
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("🏁 Quiz Complete! 🏁");
             sb.AppendLine($"You scored {_correctAnswers} out of {_currentQuizQuestions.Count} ({percentage}%)");
             sb.AppendLine();
-            sb.AppendLine(feedback);
+            sb.AppendLine(feedback); // Provide feedback based on score
             sb.AppendLine();
             sb.AppendLine("Type 'start quiz' to try again with different questions!");
 
-            return sb.ToString();
+            return sb.ToString(); // Return the quiz results
         }
 
+        // Get feedback based on the user's score percentage
         private string GetScoreFeedback(int percentage)
         {
             // Find the highest threshold that the score meets
@@ -270,14 +281,15 @@ namespace ChatbotPart3
                 .OrderByDescending(key => key)
                 .FirstOrDefault();
 
-            return _scoreFeedback[threshold];
+            return _scoreFeedback[threshold]; // Return feedback for the corresponding score
         }
 
+        // Get random feedback based on whether the answer was correct or incorrect
         private string GetRandomFeedback(bool isCorrect)
         {
-            string[] feedbackArray = isCorrect ? _correctFeedback : _incorrectFeedback;
-            int index = _random.Next(feedbackArray.Length);
-            return feedbackArray[index];
+            string[] feedbackArray = isCorrect ? _correctFeedback : _incorrectFeedback; // Select feedback array based on correctness
+            int index = _random.Next(feedbackArray.Length); // Get a random index
+            return feedbackArray[index]; // Return random feedback
         }
     }
 }

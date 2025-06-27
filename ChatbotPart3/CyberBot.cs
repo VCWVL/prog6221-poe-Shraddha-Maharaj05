@@ -132,7 +132,7 @@ namespace ChatbotPart3
                 // Handle quiz-related commands
                 if (_quizManager.IsQuizInProgress() || input.Contains("quiz"))
                 {
-                    string quizResponse = _quizManager.ProcessQuizCommand(input); 
+                    string quizResponse = _quizManager.ProcessQuizCommand(input);
                     if (quizResponse != null)
                     {
                         Console.WriteLine(quizResponse);

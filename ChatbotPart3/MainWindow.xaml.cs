@@ -168,7 +168,6 @@ namespace ChatbotPart3
                 }
 
                 // Handle quiz-related commands
-                // FIXED: Removed the second parameter (_userProfile)
                 string quizResponse = _quizManager.ProcessQuizCommand(input);
                 if (quizResponse != null)
                 {
@@ -468,7 +467,7 @@ namespace ChatbotPart3
         {
             AppendChat("What would you like to do next?");
             AppendChat("- Learn about: phishing, password safety, suspicious links, privacy, social engineering, identity theft");
-            AppendChat("- Task management: add task, view tasks, complete task, delete task");
+            AppendChat("- Task management: add task, view tasks, complete task, delete task, set reminder, task help");
             AppendChat("- Take a quiz: start quiz, quiz categories");
             AppendChat("- View activity: show activity log, what have you done for me");
             AppendChat("Type 'exit' to quit.");
